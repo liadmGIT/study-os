@@ -41,7 +41,7 @@ export function ConnectPage() {
             <>
               <div className="font-medium text-overdue">השרת לא מצליח להגיע ל-Moodle</div>
               <div className="text-xs text-muted">
-                ייתכן שהאוניברסיטה חוסמת גישה מחוץ לישראל. ראה ב-README איך להעביר את המערכת לשרת בתל אביב.
+                ייתכן שהאוניברסיטה חוסמת את כתובת השרת, או שחומת האש של השרת חוסמת יציאה. אפשר להריץ את המערכת על שרת אחר (ראה "צעד 2ב" ב-README).
               </div>
               <div className="mt-1 truncate text-[11px] text-faint" dir="ltr">
                 {ping.data?.error}

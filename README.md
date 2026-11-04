@@ -79,58 +79,84 @@ npm run moodle:probe
 
 אם כתוב שההתחברות היא "דרך הדפדפן (SSO)", במערכת תשתמש באפשרות **"דרך הדפדפן"**, ולא בשם משתמש וסיסמה.
 
-## צעד 2: העלאה לשרת ב-Railway (בערך 5$ לחודש)
+אפשר גם לבדוק רק אם האתר זמין, בלי להתחבר:
 
-1. היכנס ל-[railway.com](https://railway.com) ← **New Project** ← **Deploy from GitHub repo**, ובחר את ה-repo. Railway מזהה את ה-`Dockerfile` לבד.
-2. בלשונית **Variables** הוסף:
+```bash
+npm run moodle:probe -- --public
+```
 
-   | משתנה | ערך |
-   |---|---|
-   | `APP_PASSWORD` | סיסמה לכניסה למערכת (תבחר אחת חזקה) |
-   | `ENCRYPTION_KEY` | מחרוזת אקראית ארוכה |
-   | `SESSION_SECRET` | מחרוזת אקראית ארוכה, שונה מהקודמת |
+## צעד 2: שרת חינמי ב-Oracle Cloud (מומלץ)
 
-   אפשר ליצור מחרוזת אקראית עם הפקודה הזו (או סתם 40 תווים אקראיים):
+Oracle נותנת שרת קטן **בחינם וללא הגבלת זמן** ("Always Free"), והוא מספיק למערכת בקלות.
+בבדיקה מ-4.11.2026 ה-Moodle של בן-גוריון לא חסם גישה משרת ענן. הגישה דרך ה-API פתוחה, וגם ההתחברות עם שם משתמש וסיסמה.
 
-   ```bash
-   openssl rand -base64 32
-   ```
+### 1. פתיחת חשבון
+1. נרשמים ב-[oracle.com/cloud/free](https://www.oracle.com/cloud/free/).
+2. צריך כרטיס אשראי, אבל רק לאימות זהות. משאבי Always Free לא עולים כסף.
+3. **Home Region:** בוחרים **Israel Central (Jerusalem)**. אי אפשר לשנות את זה אחר כך, וכל אזור אחר יעבוד גם.
 
-3. **Volume:** לחץ על השירות ← **Settings** ← **Volumes** ← **Add Volume**, עם Mount path `/data`. בלי זה, הנתונים נמחקים בכל עדכון.
-4. **Settings** ← **Networking** ← **Generate Domain**. הוסף את הכתובת שקיבלת כמשתנה `PUBLIC_URL`, למשל `https://study-os-production.up.railway.app`.
-5. פתח את הכתובת, היכנס עם `APP_PASSWORD`, ועבור ל**חיבור ל-Moodle**.
-   - ✅ מופיע "השרת מגיע ל-Moodle": מתחברים, והסנכרון הראשון מתחיל.
-   - ❌ מופיע "השרת לא מצליח להגיע": כנראה האוניברסיטה חוסמת כתובות מחוץ לישראל. עבור לצעד 2ב.
+### 2. יצירת שרת
+בתפריט: **Compute** ← **Instances** ← **Create instance**.
+- **Name:** `study-os`.
+- **Image:** לוחצים **Change image** ובוחרים **Canonical Ubuntu 24.04**.
+- **Shape:** לוחצים **Change shape** ← **Ampere** ← `VM.Standard.A1.Flex`, עם 1 OCPU ו-6GB (מסומן "Always Free-eligible").
+  - אם מופיע "Out of capacity", בוחרים **AMD** ← `VM.Standard.E2.1.Micro`.
+- **Networking:** משאירים את ברירת המחדל, כולל **Assign a public IPv4 address**.
+- **Add SSH keys:** בוחרים **Generate a key pair for me** ← **Save private key**. שומרים את הקובץ, הוא המפתח לשרת.
+- לוחצים **Create**. אחרי דקה-שתיים מעתיקים את **Public IP address** מעמוד השרת.
 
-## צעד 2ב: אם Moodle חוסם את השרת, שרת בתל אביב
+### 3. פתיחת הפורטים 80 ו-443
+1. בעמוד השרת לוחצים על הקישור של ה-**Subnet** ← **Security Lists** ← **Default Security List** ← **Add Ingress Rules**.
+2. מוסיפים כלל: Source CIDR `0.0.0.0/0`, IP Protocol `TCP`, Destination Port Range `80`.
+3. לוחצים **+ Another Ingress Rule** ומוסיפים אותו דבר עם `443`. שומרים.
 
-אותה מערכת בדיוק, רק על שרת קטן באזור ישראל: Google Cloud `me-west1` או AWS `il-central-1`.
+### 4. התחברות לשרת והתקנה
+בטרמינל במחשב שלך (במק: Terminal. בווינדוס: PowerShell). מחליפים את שם הקובץ ואת ה-IP:
 
-1. צור שרת וירטואלי: Debian או Ubuntu, 1GB זיכרון מספיק. אפשר בו תעבורת HTTP ו-HTTPS.
-2. התקן Docker:
-
-   ```bash
-   curl -fsSL https://get.docker.com | sh
-   ```
-
-3. הורד את הקוד והכן הגדרות:
-
-   ```bash
-   git clone https://github.com/liadmGIT/study-os.git study-os
-   ```
+1. **רק במק או בלינוקס**, פעם אחת: נועלים את קובץ המפתח, אחרת ssh מסרב להשתמש בו.
 
    ```bash
-   cd study-os && cp .env.example .env
+   chmod 600 ~/Downloads/ssh-key-*.key
    ```
 
-4. ערוך את `.env`: מלא `APP_PASSWORD`, `ENCRYPTION_KEY`, `SESSION_SECRET`, `PUBLIC_URL`, והוסף שורה `DOMAIN=...`.
-   - אין לך דומיין? אפשר להשתמש ב-`<IP-של-השרת>.sslip.io`, למשל `34.165.10.20.sslip.io`.
-   - Caddy מוציא תעודת HTTPS לבד.
-5. הפעל:
+2. מתחברים לשרת:
 
    ```bash
-   docker compose up -d --build
+   ssh -i ~/Downloads/ssh-key-XXXX.key ubuntu@<IP-של-השרת>
    ```
+
+3. כשמחוברים לשרת, מריצים פקודה אחת שמתקינה הכול:
+
+   ```bash
+   curl -fsSL https://raw.githubusercontent.com/liadmGIT/study-os/main/deploy/setup-server.sh | bash
+   ```
+
+**מה הסקריפט עושה:**
+- מתקין Docker ומוריד את המערכת.
+- יוצר קובץ הגדרות עם מפתחות אקראיים.
+- פותח את חומת האש בשרת.
+- מקים כתובת HTTPS בחינם (`https://<IP>.sslip.io`).
+
+**כמה זמן:** בפעם הראשונה 5 עד 10 דקות.
+
+**בסוף** מופיעים כתובת וסיסמה. שמור את הסיסמה. פותחים את הכתובת, נכנסים, ועוברים ל**חיבור ל-Moodle**: שם משתמש וסיסמה של האוניברסיטה.
+
+**עדכון לגרסה חדשה:** מריצים את אותה פקודה שוב. הנתונים וההגדרות נשמרים.
+
+**צפייה בלוגים:**
+
+```bash
+cd ~/study-os && sudo docker compose logs -f app
+```
+
+## צעד 2ב: חלופות
+
+- **Railway (בערך 5$ לחודש):**
+  1. **New Project** ← **Deploy from GitHub repo** ← `liadmGIT/study-os`.
+  2. ב-**Variables** מגדירים `APP_PASSWORD`, `ENCRYPTION_KEY` ו-`SESSION_SECRET`. המפתחות הם מחרוזות אקראיות ארוכות, למשל מ-`openssl rand -base64 32`.
+  3. מוסיפים **Volume** עם Mount path `/data`.
+  4. מייצרים דומיין ב-**Networking**, ושמים אותו גם ב-`PUBLIC_URL`.
+- **כל שרת Ubuntu אחר** (למשל Google Cloud `e2-micro` החינמי, או AWS): אותו סקריפט בדיוק, רק צריך לפתוח את הפורטים 80 ו-443 בחומת האש של הספק.
 
 ## צעד 3: בטלפון
 
