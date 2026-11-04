@@ -1,7 +1,9 @@
 // Run on your own computer: checks that BGU Moodle allows app access and what the sync will see.
 //   npm run moodle:probe
 //   npm run moodle:probe -- --token <32-char token>      (if your login is via SSO)
-// Nothing is saved; the password is only sent to Moodle.
+//   npm run moodle:probe -- --public                      (only checks the site is reachable; no login)
+// Without a terminal (e.g. a cloud session) it reads MOODLE_TOKEN, or MOODLE_USERNAME + MOODLE_PASSWORD,
+// from the environment. Nothing is saved; the password is only sent to Moodle.
 import readline from 'node:readline';
 import { getPublicConfig, loginWithPassword } from '../src/moodle/auth';
 import { MoodleClient } from '../src/moodle/client';
@@ -11,7 +13,8 @@ import { IMPORTANT_FUNCTIONS } from '../src/routes/moodle';
 
 const base = (process.env.MOODLE_URL ?? 'https://moodle.bgu.ac.il/moodle').replace(/\/+$/, '');
 const args = process.argv.slice(2);
-const tokenArg = args.includes('--token') ? args[args.indexOf('--token') + 1] : undefined;
+const tokenArg = (args.includes('--token') ? args[args.indexOf('--token') + 1] : undefined) ?? process.env.MOODLE_TOKEN;
+const publicOnly = args.includes('--public');
 
 function ask(question: string, hidden = false): Promise<string> {
   const rl = readline.createInterface({ input: process.stdin, output: process.stdout, terminal: true });
@@ -44,11 +47,21 @@ try {
   fail(`לא הצלחתי לקבל את הגדרות האתר: ${err instanceof Error ? err.message : err}`);
 }
 
+if (publicOnly) {
+  console.log('\nבדיקה ציבורית בלבד (--public), בלי התחברות.\n');
+  process.exit(0);
+}
+
 let token = tokenArg;
 if (!token) {
   console.log('\n2. התחברות (הסיסמה נשלחת רק ל-Moodle ולא נשמרת)');
-  const username = await ask('  שם משתמש BGU: ');
-  const password = await ask('  סיסמה: ', true);
+  const fromEnv = process.env.MOODLE_USERNAME && process.env.MOODLE_PASSWORD;
+  if (!fromEnv && !process.stdin.isTTY) {
+    fail('אין טרמינל להקלדת סיסמה. הגדר MOODLE_USERNAME ו-MOODLE_PASSWORD (או MOODLE_TOKEN), או הרץ עם --public.');
+    process.exit(1);
+  }
+  const username = process.env.MOODLE_USERNAME || (await ask('  שם משתמש BGU: '));
+  const password = process.env.MOODLE_PASSWORD || (await ask('  סיסמה: ', true));
   try {
     token = (await loginWithPassword(base, username, password)).token;
     ok('קיבלתי טוקן');
