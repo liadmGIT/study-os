@@ -11,7 +11,8 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm ci
+      # better-sqlite3 ships prebuilt binaries, so nothing needs compiling (same as the Dockerfile).
+      - run: npm ci --ignore-scripts
       - run: npm run typecheck
       - run: npm test
       - run: npm run build

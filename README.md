@@ -56,7 +56,7 @@ Moodle (moodle.bgu.ac.il)
 צריך [Node.js 22](https://nodejs.org) מותקן.
 
 ```bash
-git clone <כתובת ה-repo שלך>
+git clone https://github.com/liadmGIT/study-os.git
 ```
 
 ```bash
@@ -116,7 +116,7 @@ npm run moodle:probe
 3. הורד את הקוד והכן הגדרות:
 
    ```bash
-   git clone <כתובת ה-repo שלך> study-os
+   git clone https://github.com/liadmGIT/study-os.git study-os
    ```
 
    ```bash
