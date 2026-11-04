@@ -37,7 +37,7 @@ export function QuickAdd({ onDone, defaultCourseId }: { onDone?: () => void; def
     >
       <Input autoFocus value={title} onChange={(e) => setTitle(e.target.value)} placeholder="מה צריך לעשות? למשל: לחזור על הרצאה 4" className="sm:flex-1" />
       <div className="flex gap-2">
-        <Select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="sm:w-44" aria-label="קורס">
+        <Select value={courseId} onChange={(e) => setCourseId(e.target.value)} className="min-w-0 flex-1 sm:w-44 sm:flex-none" aria-label="קורס">
           <option value="">ללא קורס</option>
           {courses.data
             ?.filter((c) => c.active)
@@ -47,7 +47,7 @@ export function QuickAdd({ onDone, defaultCourseId }: { onDone?: () => void; def
               </option>
             ))}
         </Select>
-        <Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className="sm:w-48" aria-label="תאריך הגשה" />
+        <Input type="datetime-local" value={due} onChange={(e) => setDue(e.target.value)} className="min-w-0 flex-1 sm:w-48 sm:flex-none" aria-label="תאריך הגשה" />
         <Button variant="primary" disabled={!title.trim()} loading={add.pending} aria-label="הוסף">
           <Plus className="size-4" />
           <span className="max-sm:hidden">הוסף</span>
