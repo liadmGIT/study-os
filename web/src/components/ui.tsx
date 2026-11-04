@@ -259,3 +259,17 @@ export function SectionTitle({ children, count, action }: { children: ReactNode;
     </div>
   );
 }
+
+export function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
+  return (
+    <button
+      onClick={onClick}
+      className={cn(
+        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] whitespace-nowrap transition-colors',
+        active ? 'border-brand bg-brand text-canvas' : 'border-line bg-surface text-muted hover:text-ink',
+      )}
+    >
+      {children}
+    </button>
+  );
+}

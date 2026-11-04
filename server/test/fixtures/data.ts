@@ -29,6 +29,7 @@ export interface MockState {
   forums: MoodleForum[];
   discussions: Record<number, ForumDiscussion[]>;
   files: Record<string, string>; // path -> content
+  failOnce: Set<string>; // file names whose next download fails with HTTP 503
   nextId: number;
 }
 
@@ -87,6 +88,7 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
           mod(base + 1, 'forum', 'לוח מודעות'),
           mod(base + 2, 'resource', 'סילבוס הקורס', { contents: [file(base + 2, 'mod_resource', 'syllabus.pdf', 'application/pdf')] as never }),
           mod(base + 3, 'zoom', 'מפגשי זום של הקורס'),
+          ...(courseId === 101 ? [mod(base + 4, 'url', 'שאלות &amp; תשובות', { contents: [url('https://example.com/qa', now - 20 * DAY)] as never })] : []),
         ],
       },
     ];
@@ -115,7 +117,13 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
   };
 
   const cs1 = weeks(101, 1000, 'intro');
-  cs1[1].modules.push(mod(1015, 'assign', 'תרגיל בית 1'));
+  cs1[1].modules.push(
+    mod(1015, 'assign', 'תרגיל בית 1'),
+    // Two different files that happen to share a name in the same week.
+    mod(1016, 'resource', 'דף תרגיל 1', { contents: [file(1016, 'mod_resource', 'ex1.pdf', 'application/pdf')] as never }),
+    mod(1017, 'resource', 'פתרון תרגיל 1', { contents: [file(1017, 'mod_resource', 'ex1.pdf', 'application/pdf')] as never }),
+    mod(1018, 'resource', 'סיכום בדפדפן', { contents: [file(1018, 'mod_resource', 'notes.html', 'text/html')] as never }),
+  );
   cs1[2].modules.push(mod(1025, 'assign', 'תרגיל בית 2'));
   cs1[3].modules.push(
     mod(1035, 'assign', 'תרגיל בית 3'),
@@ -127,6 +135,7 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
     }),
   );
   const la = weeks(102, 2000, 'linalg');
+  la[1].modules.push(mod(2016, 'resource', 'דף נוסחאות', { contents: [file(2016, 'mod_resource', 'flaky.pdf', 'application/pdf')] as never }));
   la[2].modules.push(mod(2025, 'quiz', 'בוחן אמצע'));
   la[3].modules.push(mod(2035, 'assign', 'מטלה 3 - מרחבים וקטוריים'));
   const ds = weeks(103, 3000, 'ds');
@@ -162,13 +171,16 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
       { id: 503, cmid: 1035, course: 101, name: 'תרגיל בית 3', intro: '<p>מיונים.</p>', duedate: now + 13 * DAY },
       { id: 504, cmid: 2035, course: 102, name: 'מטלה 3 - מרחבים וקטוריים', intro: '', duedate: now + 5 * DAY },
       { id: 505, cmid: 3037, course: 103, name: 'פרויקט: עץ AVL', intro: '<p>פרויקט זוגות.</p>', duedate: now + 20 * DAY },
+      { id: 506, cmid: 3038, course: 103, name: 'עבודה בזוגות: גרפים', intro: '', duedate: now + 6 * DAY, teamsubmission: 1 },
     ],
     submissions: {
       501: { lastattempt: { submission: { status: 'submitted', timemodified: now - 4 * DAY } }, feedback: { gradefordisplay: '92.00 / 100.00' } },
       502: { lastattempt: { submission: { status: 'new' } } },
       503: { lastattempt: { submission: { status: 'new' } } },
       504: { lastattempt: { submission: { status: 'draft' } } },
-      505: { lastattempt: { submission: { status: 'new' } } },
+      505: { lastattempt: { submission: { status: 'new' } }, feedback: { gradefordisplay: '-' } },
+      // The partner submitted; the student's own record stays "new".
+      506: { lastattempt: { submission: { status: 'new' }, teamsubmission: { status: 'submitted' } } },
     },
     quizzes: [{ id: 601, coursemodule: 2025, course: 102, name: 'בוחן אמצע', timeopen: now + 8 * DAY, timeclose: now + 8 * DAY + 2 * 3600 }],
     attempts: { 601: [] },
@@ -215,7 +227,7 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
         {
           id: 8102,
           discussion: 8002,
-          subject: 'שינוי בשעות קבלה',
+          subject: 'שינוי בשעות קבלה &amp; תרגול',
           message: '<p>שעות הקבלה עוברות ליום ד׳.</p>',
           userfullname: 'פרופ׳ לוי',
           created: now - 2 * DAY,
@@ -224,6 +236,7 @@ export function buildFixture(baseUrl: string, now = Math.floor(Date.now() / 1000
       703: [],
     },
     files: {},
+    failOnce: new Set(['flaky.pdf']),
     nextId: 90000,
   };
 }

@@ -1,5 +1,6 @@
 // Decides what a Moodle activity is (recording, slides, file, ...) from its type, link, file type and name.
 import type { ModuleKind } from '../db/schema';
+import { dayKey, zonedToUnix } from '../lib/time';
 import type { MoodleContent } from '../moodle/types';
 
 const RECORDING_WORDS = /הקלט|recording|record|וידאו|video|סרטון|panopto|kaltura|zoom|זום|youtube|יוטיוב|צפייה/i;
@@ -91,14 +92,32 @@ export function lectureNumber(name: string): number | null {
   return m ? Number(m[1]) : null;
 }
 
-/** Finds a date like 12/03/2026, 12.3.26 or 12-03 in a name. Returns YYYY-MM-DD. */
-export function dateFromName(name: string, refYear: number): string | null {
+const MAX_YEARLESS_DISTANCE = 60 * 86400;
+
+/**
+ * Finds a date like 12/03/2026, 12.3.26 or 12-03 in a name. Returns YYYY-MM-DD.
+ * A date without a year ("12.1") is often a lecture number, so it only counts if it falls
+ * within 60 days of `refTime` (when the item was posted).
+ */
+export function dateFromName(name: string, refTime: number): string | null {
   const m = name.match(/(?<!\d)(\d{1,2})[./-](\d{1,2})(?:[./-](\d{2,4}))?(?!\d)/);
   if (!m) return null;
   const day = Number(m[1]);
   const month = Number(m[2]);
-  let year = m[3] ? Number(m[3]) : refYear;
-  if (year < 100) year += 2000;
-  if (month < 1 || month > 12 || day < 1 || day > 31 || year < 2000 || year > 2100) return null;
-  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  const key = (y: number) => `${y}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+
+  if (m[3]) {
+    let year = Number(m[3]);
+    if (year < 100) year += 2000;
+    return year >= 2000 && year <= 2100 ? key(year) : null;
+  }
+
+  const refYear = Number(dayKey(refTime).slice(0, 4));
+  let best: { k: string; distance: number } | null = null;
+  for (const y of [refYear - 1, refYear, refYear + 1]) {
+    const distance = Math.abs(zonedToUnix(y, month, day, 12) - refTime);
+    if (!best || distance < best.distance) best = { k: key(y), distance };
+  }
+  return best && best.distance <= MAX_YEARLESS_DISTANCE ? best.k : null;
 }

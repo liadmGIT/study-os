@@ -10,8 +10,11 @@ import { db, schema } from '../db';
 import { attachment, HttpError, idParam, notFound, parse } from '../lib/http';
 import { nowSec } from '../lib/time';
 import { clientFor, getAccount } from '../moodle/account';
-import { downloadFile, localPathFor, safeName } from '../sync/files';
+import { downloadAndRecord, loadFileJobs, safeName } from '../sync/files';
 import { recentlyNewModuleIds } from './updates';
+
+/** Types a browser can show without running anything (no HTML, no SVG). */
+const INLINE_SAFE = /^(application\/pdf|image\/(png|jpe?g|gif|webp|bmp|avif)|video\/|audio\/|text\/plain)/i;
 
 function absPath(rel: string): string {
   const abs = path.resolve(config.filesDir, rel);
@@ -59,8 +62,12 @@ export function fileRoutes(app: FastifyInstance) {
     const { id } = parse(idParam, req.params);
     const { inline } = parse(z.object({ inline: z.coerce.boolean().optional() }), req.query);
     const f = db().select().from(schema.files).where(eq(schema.files.id, id)).get() ?? notFound('הקובץ לא נמצא');
-    attachment(reply, f.filename, inline);
-    if (f.mimeType) reply.type(f.mimeType);
+    // Course files are other people's content: anything that could run script is always a download.
+    const showInline = Boolean(inline && f.mimeType && INLINE_SAFE.test(f.mimeType));
+    attachment(reply, f.filename, showInline);
+    reply.type(showInline ? f.mimeType! : 'application/octet-stream');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    if (showInline && f.mimeType !== 'application/pdf') reply.header('Content-Security-Policy', 'sandbox');
     if (f.localPath && fs.existsSync(absPath(f.localPath))) {
       return reply.send(fs.createReadStream(absPath(f.localPath)));
     }
@@ -72,20 +79,11 @@ export function fileRoutes(app: FastifyInstance) {
 
   app.post('/api/files/:id/retry', async (req) => {
     const { id } = parse(idParam, req.params);
-    const f = db().select().from(schema.files).where(eq(schema.files.id, id)).get() ?? notFound('הקובץ לא נמצא');
+    const job = loadFileJobs(eq(schema.files.id, id))[0] ?? notFound('הקובץ לא נמצא');
     const account = getAccount();
     if (!account) throw new HttpError(409, 'אין חיבור ל-Moodle');
-    const course = db().select().from(schema.courses).where(eq(schema.courses.id, f.courseId)).get();
-    const section = f.sectionId ? db().select().from(schema.sections).where(eq(schema.sections.id, f.sectionId)).get() : undefined;
-    const rel = localPathFor(course?.fullName ?? String(f.courseId), section?.name ?? null, f);
-    try {
-      await downloadFile(clientFor(account), f, rel);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      db().update(schema.files).set({ error: msg, skippedReason: 'error' }).where(eq(schema.files.id, id)).run();
-      throw new HttpError(502, `ההורדה נכשלה: ${msg}`);
-    }
-    db().update(schema.files).set({ localPath: rel, downloadedAt: nowSec(), error: null, skippedReason: null }).where(eq(schema.files.id, id)).run();
+    const r = await downloadAndRecord(clientFor(account), job, nowSec(), { manual: true });
+    if (!r.ok) throw new HttpError(502, `ההורדה נכשלה: ${r.error}`);
     return { ok: true };
   });
 
@@ -106,7 +104,10 @@ export function fileRoutes(app: FastifyInstance) {
       const inside = f.localPath!.startsWith(courseDir + path.sep) ? f.localPath!.slice(courseDir.length + 1) : f.localPath!;
       zip.file(abs, { name: inside });
     }
-    zip.finalize();
+    // An archive error (file vanished, client gave up) must not become an unhandled rejection.
+    zip.on('warning', (err) => req.log.warn({ err }, 'zip warning'));
+    zip.on('error', (err) => req.log.error({ err }, 'zip failed'));
+    zip.finalize().catch((err) => req.log.error({ err }, 'zip failed'));
     attachment(reply, `${course.fullName}.zip`);
     reply.type('application/zip');
     return reply.send(zip);

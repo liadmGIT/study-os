@@ -33,17 +33,28 @@ function issueSession(reply: FastifyReply) {
   });
 }
 
+const WINDOW_SEC = 600;
+const PER_IP_LIMIT = 10;
+// Single-user app: also cap all attempts together, so rotating IPs doesn't help a guesser.
+const GLOBAL_LIMIT = 30;
 const attempts = new Map<string, { count: number; resetAt: number }>();
+
+function overLimit(key: string, limit: number, now: number): boolean {
+  const a = attempts.get(key);
+  if (!a || a.resetAt < now) {
+    attempts.set(key, { count: 1, resetAt: now + WINDOW_SEC });
+    return false;
+  }
+  a.count++;
+  return a.count > limit;
+}
 
 function checkRate(ip: string) {
   const now = nowSec();
-  const a = attempts.get(ip);
-  if (!a || a.resetAt < now) {
-    attempts.set(ip, { count: 1, resetAt: now + 600 });
-    return;
+  for (const [key, a] of attempts) if (a.resetAt < now) attempts.delete(key);
+  if (overLimit('*', GLOBAL_LIMIT, now) || overLimit(ip, PER_IP_LIMIT, now)) {
+    throw new HttpError(429, 'יותר מדי ניסיונות. נסה שוב בעוד כמה דקות.', 'rate_limited');
   }
-  a.count++;
-  if (a.count > 10) throw new HttpError(429, 'יותר מדי ניסיונות. נסה שוב בעוד כמה דקות.', 'rate_limited');
 }
 
 const PUBLIC_API = new Set(['/api/auth/login', '/api/auth/me']);

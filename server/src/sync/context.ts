@@ -13,7 +13,6 @@ export interface SyncContext {
   activeCourses: Course[];
   stats: Record<string, number>;
   warnings: string[];
-  changeIds: number[];
 }
 
 /** Moodle only lets us call functions the site enabled for the mobile service. An empty list means "unknown" – try anyway. */
@@ -30,12 +29,10 @@ export function recordChange(
   c: { type: ChangeType; courseId: number | null; entityType: string; entityId: number; title: string; payload?: Record<string, unknown> },
 ) {
   if (c.courseId !== null && ctx.quietCourses.has(c.courseId)) return;
-  const row = db()
+  db()
     .insert(schema.changes)
     .values({ ...c, payload: c.payload ?? {}, createdAt: ctx.now })
-    .returning({ id: schema.changes.id })
-    .get();
-  ctx.changeIds.push(row.id);
+    .run();
   bump(ctx, `change.${c.type}`);
 }
 

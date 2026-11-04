@@ -4,7 +4,7 @@ import { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { QuickAdd } from '../components/QuickAdd';
 import { TaskRow } from '../components/TaskRow';
-import { Card, Empty, Input, PageHeader, PageLoader, SectionTitle, Segmented } from '../components/ui';
+import { Card, Chip, Empty, Input, PageHeader, PageLoader, SectionTitle, Segmented } from '../components/ui';
 import { BUCKETS } from '../lib/labels';
 import { useCourses, useTasks } from '../lib/queries';
 import type { Bucket, Task } from '../lib/types';
@@ -135,19 +135,3 @@ export function TasksPage() {
     </div>
   );
 }
-
-function Chip({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      className={clsx(
-        'inline-flex h-8 shrink-0 items-center gap-1.5 rounded-full border px-3 text-[13px] whitespace-nowrap transition-colors',
-        active ? 'border-brand bg-brand text-canvas' : 'border-line bg-surface text-muted hover:text-ink',
-      )}
-    >
-      {children}
-    </button>
-  );
-}
-
-export { Chip };

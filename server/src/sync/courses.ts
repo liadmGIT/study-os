@@ -1,5 +1,6 @@
 import { and, eq, isNull, notInArray } from 'drizzle-orm';
 import { db, schema } from '../db';
+import { cleanName } from '../lib/html';
 import { DAY } from '../lib/time';
 import type { MoodleCourse } from '../moodle/types';
 import { bump, recordChange, type SyncContext } from './context';
@@ -23,8 +24,8 @@ export async function syncCourses(ctx: SyncContext) {
 
   for (const c of list) {
     const base = {
-      shortName: c.shortname ?? '',
-      fullName: c.displayname || c.fullname,
+      shortName: cleanName(c.shortname),
+      fullName: cleanName(c.displayname || c.fullname),
       url: `${ctx.client.baseUrl}/course/view.php?id=${c.id}`,
       startDate: c.startdate || null,
       endDate: c.enddate || null,

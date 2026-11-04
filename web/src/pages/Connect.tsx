@@ -33,8 +33,8 @@ export function ConnectPage() {
           ) : ping.data?.reachable ? (
             <>
               <div className="font-medium">השרת מגיע ל-Moodle</div>
-              <div className="truncate text-xs text-muted" dir="ltr">
-                {ping.data.siteName ?? ping.data.baseUrl} · {ping.data.ms}ms
+              <div className="truncate text-xs text-muted">
+                <bdi>{ping.data.siteName ?? ping.data.baseUrl}</bdi> · <span className="tabular" dir="ltr">{ping.data.ms}ms</span>
               </div>
             </>
           ) : (
@@ -146,7 +146,7 @@ function BrowserFlow() {
   return (
     <div className="space-y-4 text-sm">
       <ol className="list-decimal space-y-2 ps-5 text-muted">
-        <li>לחץ על הכפתור למטה. ייפתח חלון של Moodle. התחבר כרגיל.</li>
+        <li>לחץ על "הכן קישור התחברות", ואז על "פתח את Moodle". התחבר כרגיל בחלון שנפתח.</li>
         <li>
           בסוף הדפדפן ינסה לפתוח כתובת שמתחילה ב-<code dir="ltr">moodlemobile://</code> ויגיד שהוא לא יכול. זה בסדר.
         </li>
@@ -154,21 +154,36 @@ function BrowserFlow() {
           העתק את הכתובת הזו (משורת הכתובת, או מהודעת השגיאה; ב-Chrome אפשר גם מ-<code dir="ltr">chrome://history</code>) והדבק כאן.
         </li>
       </ol>
-      <Button
-        onClick={async () => {
-          setError('');
-          try {
-            const r = await post<{ url: string }>('/api/moodle/launch/start');
-            setUrl(r.url);
-            window.open(r.url, '_blank', 'noopener');
-          } catch (err) {
-            setError(err instanceof Error ? err.message : 'שגיאה');
-          }
-        }}
-      >
-        <Globe className="size-4" />
-        פתח את Moodle להתחברות
-      </Button>
+      <p className="rounded-xl bg-sunken p-3 text-xs text-muted">
+        בטלפון שמותקנת בו אפליקציית Moodle, הקישור עלול להיפתח באפליקציה במקום להציג את הכתובת. במקרה כזה עדיף לעשות את השלב הזה מהמחשב, או להשתמש ב"הדבקת טוקן".
+      </p>
+      {/* The link is a real <a>, opened by the user's own tap, so pop-up blockers (Safari) don't stop it. */}
+      {url ? (
+        <a
+          href={url}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="inline-flex h-10 items-center gap-1.5 rounded-xl bg-brand px-4 text-sm font-medium text-canvas"
+        >
+          <Globe className="size-4" />
+          פתח את Moodle
+        </a>
+      ) : (
+        <Button
+          onClick={async () => {
+            setError('');
+            try {
+              const r = await post<{ url: string }>('/api/moodle/launch/start');
+              setUrl(r.url);
+            } catch (err) {
+              setError(err instanceof Error ? err.message : 'שגיאה');
+            }
+          }}
+        >
+          <Globe className="size-4" />
+          הכן קישור התחברות
+        </Button>
+      )}
       {url ? (
         <form
           className="space-y-3"

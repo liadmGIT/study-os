@@ -4,7 +4,7 @@ import { db, schema } from '../db';
 import { decrypt, encrypt } from '../lib/crypto';
 import { nowSec } from '../lib/time';
 import type { TokenResult } from './auth';
-import { MoodleClient } from './client';
+import { MoodleClient, MoodleTokenError } from './client';
 import type { SiteInfo } from './types';
 
 export type Account = typeof schema.moodleAccount.$inferSelect;
@@ -13,8 +13,22 @@ export function getAccount(): Account | undefined {
   return db().select().from(schema.moodleAccount).where(eq(schema.moodleAccount.id, 1)).get();
 }
 
+/** The stored token can't be decrypted – almost always because ENCRYPTION_KEY changed. */
+export class TokenUnreadableError extends MoodleTokenError {
+  constructor() {
+    super('The saved Moodle token cannot be decrypted (was ENCRYPTION_KEY changed?)');
+    this.name = 'TokenUnreadableError';
+  }
+}
+
 export function clientFor(account: Account): MoodleClient {
-  return new MoodleClient({ baseUrl: account.baseUrl, token: decrypt(account.tokenEnc) });
+  let token: string;
+  try {
+    token = decrypt(account.tokenEnc);
+  } catch {
+    throw new TokenUnreadableError();
+  }
+  return new MoodleClient({ baseUrl: account.baseUrl, token });
 }
 
 /** Validates the token against Moodle and stores it (encrypted). */

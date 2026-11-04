@@ -53,7 +53,8 @@ export function lectureRoutes(app: FastifyInstance) {
     const lec = getLecture(id);
     const now = nowSec();
     const update: Partial<Lecture> = { ...body, updatedAt: now };
-    const duration = body.durationMin !== undefined ? body.durationMin : lec.durationMin;
+    // Same default the screen shows when a recording's length is unknown.
+    const duration = (body.durationMin !== undefined ? body.durationMin : lec.durationMin) ?? getSettings().defaultLectureMin;
 
     // Entering a position moves the status along on its own.
     if (body.positionMin !== undefined && body.status === undefined) {

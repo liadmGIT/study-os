@@ -3,10 +3,13 @@ import { buildCatchupPlan } from '../src/domain/catchup';
 import { isNotStarted } from '../src/domain/alerts';
 import { computeUrgency } from '../src/domain/urgency';
 import { md5 } from '../src/lib/crypto';
+import { cleanName, decodeEntities, stripHtml } from '../src/lib/html';
 import { addDays, dayKey, weekStart, zonedToUnix } from '../src/lib/time';
 import { parseLaunchToken } from '../src/moodle/auth';
 import { flattenParams } from '../src/moodle/client';
 import { classifyModule, dateFromName, isTirgul, lectureNumber } from '../src/sync/classify';
+import { gradeText, needsStatusCheck } from '../src/sync/tasks';
+import type { Task } from '../src/db/schema';
 
 const HOUR = 3600;
 const DAY = 86400;
@@ -47,10 +50,17 @@ describe('name parsing', () => {
     expect(lectureNumber('סילבוס')).toBeNull();
   });
   it('reads dates', () => {
-    expect(dateFromName('הרצאה 12/03/2026', 2026)).toBe('2026-03-12');
-    expect(dateFromName('תרגול 5.11.26', 2026)).toBe('2026-11-05');
-    expect(dateFromName('שיעור 4-11', 2026)).toBe('2026-11-04');
-    expect(dateFromName('הרצאה 3', 2026)).toBeNull();
+    expect(dateFromName('הרצאה 12/03/2026', now)).toBe('2026-03-12');
+    expect(dateFromName('תרגול 5.11.26', now)).toBe('2026-11-05');
+    expect(dateFromName('שיעור 4-11', now)).toBe('2026-11-04');
+    expect(dateFromName('הרצאה 3', now)).toBeNull();
+  });
+  it('ignores year-less "dates" far from when the item was posted (usually lecture numbers)', () => {
+    expect(dateFromName('הקלטת הרצאה 12.1 - עצים', now)).toBeNull(); // posted in November
+    expect(dateFromName('הרצאות 10-11', zonedToUnix(2026, 3, 1))).toBeNull();
+    expect(dateFromName('הרצאה 3.11', now)).toBe('2026-11-03');
+    // Across the new year: posted on Jan 5, the lecture was on Dec 28.
+    expect(dateFromName('הרצאה 28.12', zonedToUnix(2027, 1, 5))).toBe('2026-12-28');
   });
   it('tells tirgul from lecture', () => {
     expect(isTirgul('הקלטת תרגול 2')).toBe(true);
@@ -145,5 +155,37 @@ describe('time', () => {
     expect(dayKey(Date.UTC(2026, 10, 4, 23, 30) / 1000)).toBe('2026-11-05');
     expect(weekStart('2026-11-04')).toBe('2026-11-01'); // Wednesday -> Sunday
     expect(addDays('2026-12-31', 1)).toBe('2027-01-01');
+  });
+});
+
+describe('html helpers', () => {
+  it('decodes entities once', () => {
+    expect(decodeEntities('R&amp;D &lt;3 &quot;x&quot; &#1488;&#x5d1;')).toBe('R&D <3 "x" אב');
+    expect(decodeEntities('&amp;lt;')).toBe('&lt;');
+    expect(decodeEntities('&bogus; & plain')).toBe('&bogus; & plain');
+  });
+  it('cleans names and HTML', () => {
+    expect(cleanName('  <span class="multilang">מבוא &amp; עוד</span>  ')).toBe('מבוא & עוד');
+    expect(stripHtml('<p>שורה 1</p><p>שורה&nbsp;2</p>')).toBe('שורה 1\nשורה 2');
+  });
+  it('treats "-" as no grade', () => {
+    expect(gradeText('-')).toBeNull();
+    expect(gradeText('')).toBeNull();
+    expect(gradeText(undefined)).toBeNull();
+    expect(gradeText('<b>85.00</b> / 100.00')).toBe('85.00 / 100.00');
+  });
+});
+
+describe('status check cadence', () => {
+  const task = (id: number, dueAt: number | null, extra: Partial<Task> = {}) => ({ id, dueAt, grade: null, moodleStatus: 'new', ...extra }) as Task;
+  it('checks near deadlines every sync and the rest hourly', () => {
+    const near = task(9001, now + 3 * DAY);
+    const far = task(9002, now + 40 * DAY);
+    const oldGraded = task(9003, now - 20 * DAY, { grade: '90' });
+    for (const t of [near, far, oldGraded]) expect(needsStatusCheck(t, now)).toBe(true); // first time: always
+    expect(needsStatusCheck(near, now + 60)).toBe(true);
+    expect(needsStatusCheck(far, now + 60)).toBe(false);
+    expect(needsStatusCheck(far, now + HOUR + 60)).toBe(true);
+    expect(needsStatusCheck(oldGraded, now + 2 * HOUR)).toBe(false);
   });
 });

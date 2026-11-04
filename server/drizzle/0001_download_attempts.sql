@@ -1,0 +1,1 @@
+ALTER TABLE `files` ADD `download_attempts` integer DEFAULT 0 NOT NULL;

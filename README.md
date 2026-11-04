@@ -196,6 +196,7 @@ npm run typecheck
 | `MOODLE_URL` | לא | ברירת מחדל: `https://moodle.bgu.ac.il/moodle` |
 | `DATA_DIR` | לא | איפה שומרים את מסד הנתונים והקבצים. ב-Docker: `/data` |
 | `VAPID_SUBJECT` | לא | כתובת `mailto:` עבור התראות push |
+| `TRUST_PROXY_HOPS` | לא | כמה proxy-ים יושבים לפני השרת. ברירת מחדל `1`, שמתאים ל-Railway ול-Caddy. `0` אם השרת חשוף ישירות |
 
 ## בעיות נפוצות
 

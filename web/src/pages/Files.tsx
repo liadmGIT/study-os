@@ -1,12 +1,11 @@
 import { CircleAlert, CircleCheck, Clock, Download, FolderOpen, RotateCw, Video } from 'lucide-react';
 import { useMemo } from 'react';
 import { useSearchParams } from 'react-router';
-import { Badge, Card, Empty, IconButton, PageHeader, PageLoader, SectionTitle } from '../components/ui';
+import { Badge, Card, Chip, Empty, IconButton, PageHeader, PageLoader, SectionTitle } from '../components/ui';
 import { post } from '../lib/api';
 import { formatAgo, formatSize } from '../lib/format';
 import { useAction, useCourses, useFiles } from '../lib/queries';
 import type { FileItem } from '../lib/types';
-import { Chip } from './Tasks';
 
 const STATE: Record<FileItem['state'], { label: string; icon: typeof Clock; tone: 'green' | 'neutral' | 'red' | 'slate' }> = {
   downloaded: { label: 'הורד', icon: CircleCheck, tone: 'green' },

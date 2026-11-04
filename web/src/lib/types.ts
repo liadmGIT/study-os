@@ -180,6 +180,7 @@ export interface SyncStatus {
   last: SyncRun | null;
   connected: boolean;
   tokenInvalid: boolean;
+  everSynced: boolean;
 }
 
 export interface Dashboard {

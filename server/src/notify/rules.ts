@@ -209,10 +209,20 @@ async function pushPending(s: AppSettings, now: number) {
   for (const n of pending) db().update(schema.notifications).set({ pushedAt: now }).where(eq(schema.notifications.id, n.id)).run();
 }
 
-export async function runNotifications(now = nowSec()) {
+async function runOnce(now: number) {
   const s = getSettings();
   fromChanges(s, now);
   fromDeadlines(s, now);
   fromLectureLag(s, now);
   await pushPending(s, now);
+}
+
+// The sync and the half-hourly reminder job both call this; running them one after the other
+// keeps two runs from pushing the same pending notifications twice.
+let queue: Promise<void> = Promise.resolve();
+
+export function runNotifications(now?: number): Promise<void> {
+  const run = queue.then(() => runOnce(now ?? nowSec()));
+  queue = run.catch(() => {});
+  return run;
 }

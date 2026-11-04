@@ -116,8 +116,10 @@ export async function startMockMoodle(opts: { port?: number; state?: (baseUrl: s
     if (u.pathname.startsWith('/webservice/pluginfile.php/')) {
       if (u.searchParams.get('token') !== state.token) return json(200, { error: 'Invalid token', errorcode: 'invalidtoken' });
       const name = decodeURIComponent(u.pathname.split('/').pop() ?? 'file');
+      if (state.failOnce.delete(name)) return json(503, { error: 'temporarily unavailable' });
       res.writeHead(200, { 'Content-Type': 'application/octet-stream' });
-      return res.end(state.files[name] ?? `mock content of ${name}\n`);
+      // The path includes the activity id, so same-named files in different activities differ.
+      return res.end(state.files[name] ?? `mock content of ${decodeURIComponent(u.pathname)}\n`);
     }
 
     // Demo helper: POST /__mock/scenario moves a deadline, posts a recording and an announcement.
@@ -171,4 +173,6 @@ export function applyScenario(state: MockState) {
     ...(state.discussions[703] ?? []),
   ];
   state.submissions[502] = { lastattempt: { submission: { status: 'submitted', timemodified: now } } };
+  // The student filled in the feedback form, so Moodle drops it from the timeline.
+  state.events = state.events.filter((e) => e.id !== 9001);
 }

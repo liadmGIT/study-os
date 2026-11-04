@@ -2,13 +2,12 @@ import { CalendarDays, CirclePlay } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { LectureRow } from '../components/LectureRow';
-import { Card, CardHeader, CourseTag, Empty, PageHeader, PageLoader, Progress, SectionTitle, Segmented } from '../components/ui';
+import { Card, CardHeader, Chip, CourseTag, Empty, PageHeader, PageLoader, Progress, SectionTitle, Segmented } from '../components/ui';
 import { formatMinutes, formatWeekdayShort, formatDayKey } from '../lib/format';
 import { useLectures } from '../lib/queries';
 import { useQuery } from '@tanstack/react-query';
 import { get } from '../lib/api';
 import type { Lecture, PlanDay } from '../lib/types';
-import { Chip } from './Tasks';
 
 type Show = 'pending' | 'all' | 'notes';
 

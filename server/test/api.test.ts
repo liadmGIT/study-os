@@ -110,6 +110,11 @@ describe('api', () => {
     const end = await call('PATCH', `/api/lectures/${lec.moduleId}`, { positionMin: 90 });
     expect(end.json.status).toBe('watched');
     expect(end.json.watchedAt).toBeTruthy();
+
+    // No length set: the 90-minute default the screen shows is used.
+    const other = lectures.find((l: { moduleId: number; durationMin: number | null }) => l.moduleId !== lec.moduleId && l.durationMin === null);
+    const done = await call('PATCH', `/api/lectures/${other.moduleId}`, { positionMin: 90 });
+    expect(done.json.status).toBe('watched');
   });
 
   it('lets the user reclassify a module as a recording', async () => {
@@ -150,6 +155,16 @@ describe('api', () => {
     const dl = await call('GET', `/api/files/${pdf.id}/download`);
     expect(dl.status).toBe(200);
     expect(dl.headers['content-disposition']).toContain("filename*=UTF-8''intro_lecture1.pdf");
+    // Course files that could run script are never shown inside the app.
+    const html = files.find((f: { filename: string }) => f.filename === 'notes.html');
+    const htmlRes = await call('GET', `/api/files/${html.id}/download?inline=1`);
+    expect(htmlRes.headers['content-disposition']).toMatch(/^attachment/);
+    expect(htmlRes.headers['content-type']).toBe('application/octet-stream');
+    expect(htmlRes.headers['x-content-type-options']).toBe('nosniff');
+    const pdfInline = await call('GET', `/api/files/${pdf.id}/download?inline=1`);
+    expect(pdfInline.headers['content-disposition']).toMatch(/^inline/);
+    expect(pdfInline.headers['content-type']).toBe('application/pdf');
+
     const zip = await app.inject({ method: 'GET', url: '/api/files/zip?courseId=101', headers: { cookie } });
     expect(zip.statusCode).toBe(200);
     expect(zip.rawPayload.subarray(0, 2).toString()).toBe('PK');
@@ -161,5 +176,18 @@ describe('api', () => {
     expect(s.settings.notify.files).toBe(true);
     expect(s.settings.notify.deadline).toBe(true);
     expect((await call('PATCH', '/api/settings', { dailyStudyMin: -5 })).status).toBe(400);
+  });
+
+  // Keep last: it locks the login for the rest of the window.
+  it('limits password guessing, even when the client rotates X-Forwarded-For', async () => {
+    const attempt = async (ip: string) =>
+      (await app.inject({ method: 'POST', url: '/api/auth/login', payload: { password: 'nope' }, headers: { 'x-forwarded-for': ip } })).statusCode;
+    const same: number[] = [];
+    for (let i = 0; i < 11; i++) same.push(await attempt('10.0.0.1'));
+    expect(same.slice(0, 10).every((s) => s === 401)).toBe(true);
+    expect(same[10]).toBe(429);
+    let last = 0;
+    for (let i = 0; i < 40; i++) last = await attempt(`10.1.0.${i}`);
+    expect(last).toBe(429);
   });
 });

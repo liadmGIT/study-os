@@ -1,6 +1,7 @@
 // Lecturer announcements (the "news" forum of each course).
 import { eq } from 'drizzle-orm';
 import { db, schema } from '../db';
+import { cleanName } from '../lib/html';
 import type { ForumDiscussionsResponse, MoodleForum } from '../moodle/types';
 import { bump, can, recordChange, step, type SyncContext } from './context';
 
@@ -30,9 +31,9 @@ export async function syncAnnouncements(ctx: SyncContext) {
           const row = {
             courseId: forum.course,
             forumId: forum.id,
-            subject: d.subject || d.name || '',
+            subject: cleanName(d.subject || d.name),
             message: d.message ?? '',
-            author: d.userfullname ?? null,
+            author: d.userfullname ? cleanName(d.userfullname) : null,
             postedAt,
             pinned: Boolean(d.pinned),
           };

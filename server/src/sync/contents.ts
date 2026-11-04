@@ -3,6 +3,7 @@ import { and, eq, isNull, notInArray } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { Course, Module, ModuleKind } from '../db/schema';
 import { stableHash } from '../lib/crypto';
+import { cleanName } from '../lib/html';
 import { dayKey } from '../lib/time';
 import type { MoodleModule, MoodleSection } from '../moodle/types';
 import { classifyModule, dateFromName, externalUrlOf, lectureNumber } from './classify';
@@ -35,7 +36,7 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
       const secRow = {
         courseId: course.id,
         number: sec.section,
-        name: sec.name ?? '',
+        name: cleanName(sec.name),
         visible: sec.visible !== 0,
         removedAt: null,
       };
@@ -44,11 +45,12 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
       sec.modules.forEach((m, position) => {
         if (m.uservisible === false) return;
         seenModuleIds.push(m.id);
-        const kind = classifyModule(m);
+        const name = cleanName(m.name);
+        const kind = classifyModule({ ...m, name });
         const externalUrl = externalUrlOf(m.modname, m.contents);
         const fileContents = (m.contents ?? []).filter((c) => c.type === 'file' && c.fileurl);
         const hash = stableHash({
-          n: m.name,
+          n: name,
           u: externalUrl,
           v: m.visible,
           f: fileContents.map((c) => [c.filepath, c.filename, c.timemodified, c.filesize]),
@@ -60,7 +62,7 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
           position,
           instance: m.instance ?? null,
           modname: m.modname,
-          name: m.name,
+          name,
           url: m.url ?? null,
           externalUrl,
           description: m.description ?? null,
@@ -78,7 +80,7 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
           bump(ctx, 'modules.new');
           if (!quiet && row.visible && !TASK_KINDS.has(kind) && !SILENT_KINDS.has(kind)) {
             const type = kind === 'recording' ? 'recording_new' : ['file', 'slides', 'folder'].includes(kind) ? 'file_new' : 'module_new';
-            recordChange(ctx, { type, courseId: course.id, entityType: 'module', entityId: m.id, title: m.name, payload: { kind } });
+            recordChange(ctx, { type, courseId: course.id, entityType: 'module', entityId: m.id, title: name, payload: { kind } });
           }
         } else {
           db().update(schema.modules).set(row).where(eq(schema.modules.id, m.id)).run();
@@ -111,7 +113,7 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
               .run();
             bump(ctx, 'files.new');
             if (!quiet && !isNewModule && effectiveKind({ kind, kindOverride: old?.kindOverride ?? null }) !== 'recording') {
-              recordChange(ctx, { type: 'file_new', courseId: course.id, entityType: 'module', entityId: m.id, title: `${m.name}: ${c.filename}` });
+              recordChange(ctx, { type: 'file_new', courseId: course.id, entityType: 'module', entityId: m.id, title: `${name}: ${c.filename}` });
             }
           } else {
             const changed = (c.timemodified ?? null) !== existingFile.timeModified;
@@ -129,7 +131,7 @@ export async function syncCourseContents(ctx: SyncContext, course: Course) {
               .where(eq(schema.files.id, existingFile.id))
               .run();
             if (changed && !quiet && existingFile.timeModified) {
-              recordChange(ctx, { type: 'file_updated', courseId: course.id, entityType: 'module', entityId: m.id, title: `${m.name}: ${c.filename}` });
+              recordChange(ctx, { type: 'file_updated', courseId: course.id, entityType: 'module', entityId: m.id, title: `${name}: ${c.filename}` });
             }
           }
         }
@@ -180,9 +182,8 @@ export function ensureLecture(ctx: { now: number; quietCourses: Set<number> }, c
     }
     return;
   }
-  const refYear = Number(dayKey(mod.moodleTime ?? ctx.now).slice(0, 4));
   const lectureDate =
-    dateFromName(mod.name, refYear) ?? (mod.moodleTime ? dayKey(mod.moodleTime) : ctx.quietCourses.has(course.id) ? null : dayKey(ctx.now));
+    dateFromName(mod.name, mod.moodleTime ?? ctx.now) ?? (mod.moodleTime ? dayKey(mod.moodleTime) : ctx.quietCourses.has(course.id) ? null : dayKey(ctx.now));
   db()
     .insert(schema.lectures)
     .values({ moduleId, courseId: course.id, lectureDate, slidesModuleId: slides?.id ?? null, updatedAt: ctx.now })

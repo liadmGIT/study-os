@@ -63,7 +63,7 @@ export function DashboardPage() {
             חיבור ל-Moodle
           </Link>
         </Card>
-      ) : d.sync.running && !d.sync.last?.finishedAt ? (
+      ) : d.sync.running && !d.sync.everSynced ? (
         <Card className="mb-5 flex items-center gap-3 p-4 text-sm">
           <Sparkles className="size-5 text-accent" />
           הסנכרון הראשון רץ עכשיו. זה לוקח בדרך כלל פחות מדקה.

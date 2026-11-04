@@ -1,8 +1,9 @@
 // Assignments, quizzes and other dated activities become tasks. Tracks due-date changes and submission state.
-import { and, eq, inArray, isNull, notInArray } from 'drizzle-orm';
+import { and, eq, gte, inArray, isNull, notInArray, type SQL } from 'drizzle-orm';
 import { db, schema } from '../db';
 import type { Task, TaskSource } from '../db/schema';
-import { DAY } from '../lib/time';
+import { cleanName, stripHtml } from '../lib/html';
+import { DAY, HOUR } from '../lib/time';
 import type {
   ActionEventsResponse,
   AssignmentsResponse,
@@ -11,22 +12,6 @@ import type {
   SubmissionStatusResponse,
 } from '../moodle/types';
 import { bump, can, recordChange, step, type SyncContext } from './context';
-
-export function stripHtml(html: string | undefined | null): string {
-  if (!html) return '';
-  return html
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<\/(p|div|li|h\d)>/gi, '\n')
-    .replace(/<[^>]+>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/&amp;/g, '&')
-    .replace(/&lt;/g, '<')
-    .replace(/&gt;/g, '>')
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
 
 interface MoodleTaskInput {
   source: Exclude<TaskSource, 'personal'>;
@@ -148,12 +133,28 @@ export function applyMoodleStatus(ctx: SyncContext, task: Task, moodleStatus: st
   }
 }
 
-/** Skip status calls for old, settled tasks so each sync stays light. */
-function needsStatusCheck(task: Task, now: number): boolean {
-  if (!task.dueAt) return true;
-  if (task.dueAt > now - 14 * DAY) return true;
-  if (!task.moodleStatus) return true;
-  return !task.grade && task.dueAt > now - 60 * DAY;
+const lastStatusCheck = new Map<number, number>();
+
+/**
+ * Decides whether to ask Moodle for this task's submission state in this sync.
+ * Tasks due within ±14 days are checked every sync; far-off or undated ones hourly;
+ * old ones hourly until graded (or 60 days old). Everything is checked once after a restart.
+ */
+export function needsStatusCheck(task: Task, now: number): boolean {
+  const last = lastStatusCheck.get(task.id);
+  let due: boolean;
+  if (last === undefined) due = true;
+  else if (task.dueAt && task.dueAt < now - 14 * DAY) due = !task.grade && task.dueAt > now - 60 * DAY && now - last >= HOUR;
+  else if (!task.dueAt || task.dueAt > now + 14 * DAY) due = now - last >= HOUR;
+  else due = true;
+  if (due) lastStatusCheck.set(task.id, now);
+  return due;
+}
+
+/** Moodle shows "-" (or nothing) when there is feedback but no grade. */
+export function gradeText(gradefordisplay: string | undefined): string | null {
+  const g = stripHtml(gradefordisplay);
+  return g && g !== '-' ? g : null;
 }
 
 export async function syncAssignments(ctx: SyncContext) {
@@ -162,7 +163,7 @@ export async function syncAssignments(ctx: SyncContext) {
     courseids: ctx.activeCourses.map((c) => c.id),
   });
   const seen: number[] = [];
-  const toCheck: { task: Task; assignId: number }[] = [];
+  const toCheck: { task: Task; assignId: number; team: boolean }[] = [];
   for (const course of res.courses) {
     for (const a of course.assignments) {
       seen.push(a.id);
@@ -171,14 +172,14 @@ export async function syncAssignments(ctx: SyncContext) {
         moodleId: a.id,
         cmid: a.cmid,
         courseId: a.course ?? course.id,
-        title: a.name,
+        title: cleanName(a.name),
         description: stripHtml(a.intro) || null,
         url: `${ctx.client.baseUrl}/mod/assign/view.php?id=${a.cmid}`,
         dueAt: a.duedate,
         cutoffAt: a.cutoffdate,
         opensAt: a.allowsubmissionsfromdate,
       });
-      if (!a.nosubmissions && needsStatusCheck(task, ctx.now)) toCheck.push({ task, assignId: a.id });
+      if (!a.nosubmissions && needsStatusCheck(task, ctx.now)) toCheck.push({ task, assignId: a.id, team: Boolean(a.teamsubmission) });
     }
   }
   markMissingRemoved(ctx, 'assign', seen);
@@ -186,12 +187,13 @@ export async function syncAssignments(ctx: SyncContext) {
 
   if (!can(ctx, 'mod_assign_get_submission_status')) return;
   await Promise.all(
-    toCheck.map(({ task, assignId }) =>
+    toCheck.map(({ task, assignId, team }) =>
       step(ctx, `submission ${assignId}`, async () => {
         const s = await ctx.client.call<SubmissionStatusResponse>('mod_assign_get_submission_status', { assignid: assignId });
-        const sub = s.lastattempt?.submission ?? s.lastattempt?.teamsubmission;
-        const graded = s.feedback?.gradefordisplay ? stripHtml(s.feedback.gradefordisplay) : null;
-        applyMoodleStatus(ctx, task, sub?.status ?? null, graded || null);
+        // In group assignments the partner's submission is the team submission; the personal one stays "new".
+        const attempt = s.lastattempt;
+        const sub = team ? (attempt?.teamsubmission ?? attempt?.submission) : (attempt?.submission ?? attempt?.teamsubmission);
+        applyMoodleStatus(ctx, task, sub?.status ?? null, gradeText(s.feedback?.gradefordisplay));
       }),
     ),
   );
@@ -211,7 +213,7 @@ export async function syncQuizzes(ctx: SyncContext) {
       moodleId: q.id,
       cmid: q.coursemodule,
       courseId: q.course,
-      title: q.name,
+      title: cleanName(q.name),
       description: stripHtml(q.intro) || null,
       url: `${ctx.client.baseUrl}/mod/quiz/view.php?id=${q.coursemodule}`,
       dueAt: q.timeclose ?? null,
@@ -238,9 +240,11 @@ export async function syncQuizzes(ctx: SyncContext) {
 /** Other dated activities (workshops, lessons, feedback forms...) from the Moodle timeline. */
 export async function syncActionEvents(ctx: SyncContext) {
   if (!can(ctx, 'core_calendar_get_action_events_by_timesort')) return;
+  const timesortfrom = ctx.now - 14 * DAY;
+  const limitnum = 50;
   const res = await ctx.client.call<ActionEventsResponse>('core_calendar_get_action_events_by_timesort', {
-    timesortfrom: ctx.now - 14 * DAY,
-    limitnum: 50,
+    timesortfrom,
+    limitnum,
     limittononsuspendedevents: 1,
   });
   const activeIds = new Set(ctx.activeCourses.map((c) => c.id));
@@ -252,19 +256,30 @@ export async function syncActionEvents(ctx: SyncContext) {
       moodleId: e.id,
       cmid: null,
       courseId: e.course.id,
-      title: e.activityname || e.name,
+      title: cleanName(e.activityname || e.name),
       description: null,
       url: e.url ?? e.action?.url ?? null,
       dueAt: e.timesort ?? e.timestart,
     });
   }
+  // Moodle drops an action event once it's done (form filled, lesson finished). If we got the whole
+  // list (fewer than the page size), tasks whose event is gone are finished or deleted.
+  if (res.events.length < limitnum) {
+    markMissingRemoved(
+      ctx,
+      'event',
+      res.events.map((e) => e.id),
+      gte(schema.tasks.dueAt, timesortfrom),
+    );
+  }
   bump(ctx, 'events', res.events.length);
 }
 
-function markMissingRemoved(ctx: SyncContext, source: TaskSource, seenIds: number[]) {
+function markMissingRemoved(ctx: SyncContext, source: TaskSource, seenIds: number[], extra?: SQL) {
   const courseIds = ctx.activeCourses.map((c) => c.id);
   if (!courseIds.length) return;
-  const conds = [eq(schema.tasks.source, source), inArray(schema.tasks.courseId, courseIds), isNull(schema.tasks.removedAt)];
+  const conds: SQL[] = [eq(schema.tasks.source, source), inArray(schema.tasks.courseId, courseIds), isNull(schema.tasks.removedAt)];
+  if (extra) conds.push(extra);
   if (seenIds.length) conds.push(notInArray(schema.tasks.moodleId, seenIds));
   db()
     .update(schema.tasks)

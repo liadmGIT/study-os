@@ -1,9 +1,9 @@
 // Runs one full sync with Moodle. Only one sync runs at a time.
 import { and, desc, eq, inArray, isNull } from 'drizzle-orm';
 import { db, schema } from '../db';
-import { nowSec } from '../lib/time';
-import { clientFor, getAccount, markOk, markTokenInvalid } from '../moodle/account';
-import { MoodleTokenError } from '../moodle/client';
+import { dayKey, nowSec } from '../lib/time';
+import { clientFor, getAccount, markOk, markTokenInvalid, TokenUnreadableError } from '../moodle/account';
+import { MoodleTokenError, type MoodleClient } from '../moodle/client';
 import type { SiteInfo } from '../moodle/types';
 import { addNotification, runNotifications } from '../notify/rules';
 import { syncCourseContents } from './contents';
@@ -32,6 +32,25 @@ export function runSync(trigger: SyncTrigger, opts: { skipDownloads?: boolean } 
   return running;
 }
 
+/** After a restart, runs that were in progress will never finish – close them. */
+export function closeInterruptedRuns() {
+  db()
+    .update(schema.syncRuns)
+    .set({ status: 'error', finishedAt: nowSec(), error: 'השרת הופעל מחדש באמצע הסנכרון' })
+    .where(eq(schema.syncRuns.status, 'running'))
+    .run();
+}
+
+/** Has any sync ever finished (fully or partly)? */
+export function everSynced(): boolean {
+  return !!db()
+    .select({ id: schema.syncRuns.id })
+    .from(schema.syncRuns)
+    .where(inArray(schema.syncRuns.status, ['ok', 'partial']))
+    .limit(1)
+    .get();
+}
+
 export function lastSyncRun() {
   return db().select().from(schema.syncRuns).orderBy(desc(schema.syncRuns.id)).limit(1).get();
 }
@@ -43,9 +62,8 @@ async function doSync(trigger: SyncTrigger, opts: { skipDownloads?: boolean }): 
 
   const startedAt = nowSec();
   const run = db().insert(schema.syncRuns).values({ trigger, startedAt, status: 'running' }).returning().get();
-  const client = clientFor(account);
   const ctx: SyncContext = {
-    client,
+    client: undefined as unknown as MoodleClient, // set first thing inside the try
     userId: account.userId,
     now: startedAt,
     functions: new Set(account.functions),
@@ -53,11 +71,12 @@ async function doSync(trigger: SyncTrigger, opts: { skipDownloads?: boolean }): 
     activeCourses: [],
     stats: {},
     warnings: [],
-    changeIds: [],
   };
 
   let result: SyncResult;
   try {
+    const client = clientFor(account);
+    ctx.client = client;
     const info = await client.call<SiteInfo>('core_webservice_get_site_info');
     const fns = (info.functions ?? []).map((f) => f.name);
     ctx.functions = new Set(fns);
@@ -103,12 +122,17 @@ async function doSync(trigger: SyncTrigger, opts: { skipDownloads?: boolean }): 
   } catch (err) {
     if (err instanceof MoodleTokenError) {
       markTokenInvalid();
+      const unreadable = err instanceof TokenUnreadableError;
+      // One reminder per reason per day, however many syncs fail.
       addNotification({
-        key: `reconnect:${startedAt}`,
+        key: `reconnect:${unreadable ? 'key' : 'token'}:${dayKey(startedAt)}`,
         type: 'reconnect',
         title: 'צריך להתחבר מחדש ל-Moodle',
-        body: 'החיבור ל-Moodle פג. היכנס להגדרות והתחבר שוב כדי שהסנכרון ימשיך.',
-        url: '/settings',
+        body:
+          unreadable
+            ? 'מפתח ההצפנה (ENCRYPTION_KEY) השתנה, ולכן אי אפשר לקרוא את החיבור השמור. התחבר שוב כדי שהסנכרון ימשיך.'
+            : 'החיבור ל-Moodle פג. היכנס להגדרות והתחבר שוב כדי שהסנכרון ימשיך.',
+        url: '/connect',
       });
       await runNotifications().catch(() => {});
     }

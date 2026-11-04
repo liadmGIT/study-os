@@ -15,8 +15,13 @@ import { settingsRoutes } from './routes/settings';
 import { taskRoutes } from './routes/tasks';
 import { updateRoutes } from './routes/updates';
 
+/** Trust exactly `hops` proxies in front of us (hop 0 is the direct connection). */
+function trustHops(hops: number) {
+  return (_address: string, hop: number) => hop < hops;
+}
+
 export async function buildApp(opts: { logger?: boolean } = {}) {
-  const app = Fastify({ logger: opts.logger ?? false, disableRequestLogging: true, trustProxy: true, bodyLimit: 2 * 1024 * 1024 });
+  const app = Fastify({ logger: opts.logger ?? false, disableRequestLogging: true, trustProxy: trustHops(config.trustProxyHops), bodyLimit: 2 * 1024 * 1024 });
 
   await app.register(cookie);
 

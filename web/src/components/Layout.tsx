@@ -20,18 +20,21 @@ const NAV = [
   { to: '/settings', label: 'הגדרות', icon: Settings },
 ];
 
-export function SyncButton({ compact }: { compact?: boolean }) {
+/** Refreshes every screen once a sync finishes. Mounted once, in the layout. */
+function useRefreshAfterSync() {
   const status = useSyncStatus();
   const qc = useQueryClient();
   const wasRunning = useRef(false);
-  const sync = useAction(() => post('/api/sync'));
-  const running = status.data?.running || sync.pending;
-
-  // Refresh every screen once a sync finishes.
   useEffect(() => {
     if (wasRunning.current && !status.data?.running) qc.invalidateQueries();
     wasRunning.current = !!status.data?.running;
   }, [status.data?.running, qc]);
+}
+
+export function SyncButton({ compact }: { compact?: boolean }) {
+  const status = useSyncStatus();
+  const sync = useAction(() => post('/api/sync'));
+  const running = status.data?.running || sync.pending;
 
   if (!status.data?.connected) return null;
   const last = status.data.last;
@@ -66,6 +69,7 @@ function Banner() {
 }
 
 export function Layout() {
+  useRefreshAfterSync();
   const [more, setMore] = useState(false);
   const [params, setParams] = useSearchParams();
   const location = useLocation();

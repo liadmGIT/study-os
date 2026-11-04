@@ -7,7 +7,7 @@ import { listTasks, type TaskView } from '../domain/tasks';
 import { parse } from '../lib/http';
 import { addDays, dayKey, todayKey, weekStart } from '../lib/time';
 import { getAccount } from '../moodle/account';
-import { isSyncRunning, lastSyncRun, runSync } from '../sync/engine';
+import { everSynced, isSyncRunning, lastSyncRun, runSync } from '../sync/engine';
 import { recentChanges } from './updates';
 
 const ACTIVE_BUCKETS = new Set(['overdue', 'urgent', 'week', 'later', 'nodate']);
@@ -17,6 +17,7 @@ function syncStatus() {
   return {
     running: isSyncRunning(),
     last: lastSyncRun() ?? null,
+    everSynced: everSynced(),
     connected: !!a,
     tokenInvalid: a?.tokenInvalid ?? false,
   };

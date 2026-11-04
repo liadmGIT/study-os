@@ -37,6 +37,9 @@ export const config = {
   webDist: path.resolve(env.WEB_DIST ?? path.join(appRoot, 'web/dist')),
   migrationsDir: path.resolve(env.MIGRATIONS_DIR ?? path.join(appRoot, 'server/drizzle')),
   disableScheduler: env.DISABLE_SCHEDULER === '1',
+  // How many reverse proxies sit in front of the app (Railway's edge, or Caddy). Only their
+  // X-Forwarded-For entries are trusted, so clients can't fake their IP.
+  trustProxyHops: Number(env.TRUST_PROXY_HOPS ?? 1),
   publicUrl: env.PUBLIC_URL?.replace(/\/+$/, ''),
   vapidSubject: env.VAPID_SUBJECT ?? 'mailto:study-os@example.com',
 };

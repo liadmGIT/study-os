@@ -114,6 +114,7 @@ export const files = sqliteTable(
     downloadedAt: integer('downloaded_at'),
     skippedReason: text('skipped_reason'),
     error: text('error'),
+    downloadAttempts: integer('download_attempts').notNull().default(0),
     firstSeenAt: integer('first_seen_at').notNull(),
     removedAt: integer('removed_at'),
   },
