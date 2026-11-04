@@ -5,6 +5,7 @@ import { db, schema } from '../db';
 import { computeLag, listLectures } from '../domain/lectures';
 import { listTasks } from '../domain/tasks';
 import { idParam, notFound, parse } from '../lib/http';
+import { recentlyNewModuleIds } from './updates';
 
 export function courseRoutes(app: FastifyInstance) {
   app.get('/api/courses', async () => {
@@ -68,6 +69,7 @@ export function courseRoutes(app: FastifyInstance) {
       .limit(30)
       .all();
     const lectures = listLectures({ courseId: id });
+    const fresh = recentlyNewModuleIds();
     return {
       course,
       sections: sections.map((s) => ({
@@ -85,6 +87,7 @@ export function courseRoutes(app: FastifyInstance) {
             externalUrl: m.externalUrl,
             visible: m.visible,
             firstSeenAt: m.firstSeenAt,
+            isNew: fresh.has(m.id),
             files: files
               .filter((f) => f.moduleId === m.id)
               .map((f) => ({ id: f.id, filename: f.filename, fileSize: f.fileSize, downloadedAt: f.downloadedAt, skippedReason: f.skippedReason })),

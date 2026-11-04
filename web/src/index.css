@@ -1,0 +1,118 @@
+@import 'tailwindcss';
+
+@theme {
+  --font-sans: 'Heebo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+
+  --color-canvas: #f7f6f3;
+  --color-surface: #ffffff;
+  --color-sunken: #efede8;
+  --color-line: #e4e1da;
+  --color-ink: #1c1f26;
+  --color-muted: #6b6f7a;
+  --color-faint: #9a9da6;
+  --color-brand: #1f2a44;
+  --color-brand-soft: #e6e9f2;
+  --color-accent: #d97706;
+
+  --color-overdue: #dc2626;
+  --color-urgent: #ea580c;
+  --color-week: #ca8a04;
+  --color-later: #64748b;
+  --color-ok: #16a34a;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --color-canvas: #111317;
+    --color-surface: #181b21;
+    --color-sunken: #0d0f12;
+    --color-line: #2a2e37;
+    --color-ink: #e9eaee;
+    --color-muted: #a0a4ae;
+    --color-faint: #6f7480;
+    --color-brand: #c7d0ea;
+    --color-brand-soft: #232a3b;
+    --color-accent: #f59e0b;
+    --color-overdue: #f87171;
+    --color-urgent: #fb923c;
+    --color-week: #facc15;
+    --color-later: #94a3b8;
+    --color-ok: #4ade80;
+  }
+}
+
+html,
+body {
+  background: var(--color-canvas);
+  color: var(--color-ink);
+  -webkit-tap-highlight-color: transparent;
+}
+
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: 'tnum' 0;
+}
+
+.tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Notes / announcement HTML */
+.prose-he {
+  line-height: 1.7;
+  overflow-wrap: anywhere;
+}
+.prose-he h1,
+.prose-he h2,
+.prose-he h3 {
+  font-weight: 700;
+  margin: 0.8em 0 0.3em;
+}
+.prose-he h1 {
+  font-size: 1.2rem;
+}
+.prose-he h2 {
+  font-size: 1.08rem;
+}
+.prose-he p {
+  margin: 0.4em 0;
+}
+.prose-he ul,
+.prose-he ol {
+  padding-inline-start: 1.3em;
+  margin: 0.4em 0;
+}
+.prose-he ul {
+  list-style: disc;
+}
+.prose-he ol {
+  list-style: decimal;
+}
+.prose-he a {
+  color: var(--color-brand);
+  text-decoration: underline;
+}
+.prose-he code {
+  background: var(--color-sunken);
+  border-radius: 4px;
+  padding: 0 4px;
+  direction: ltr;
+  unicode-bidi: isolate;
+}
+.prose-he img {
+  max-width: 100%;
+  height: auto;
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+@keyframes spin-slow {
+  to {
+    transform: rotate(360deg);
+  }
+}
+.animate-spin-slow {
+  animation: spin-slow 1.2s linear infinite;
+}

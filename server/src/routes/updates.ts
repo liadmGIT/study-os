@@ -1,4 +1,5 @@
-import { and, desc, eq, lt } from 'drizzle-orm';
+import { and, desc, eq, gt, lt } from 'drizzle-orm';
+import { nowSec } from '../lib/time';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { db, schema } from '../db';
@@ -14,6 +15,18 @@ export function recentChanges(limit: number, before?: number) {
     .limit(limit)
     .all()
     .map((c) => ({ ...c, course: c.courseId ? (names.get(c.courseId) ?? null) : null }));
+}
+
+/** Modules that showed up (or got new files) after the first sync, in the last week. */
+export function recentlyNewModuleIds(): Set<number> {
+  return new Set(
+    db()
+      .select({ id: schema.changes.entityId })
+      .from(schema.changes)
+      .where(and(eq(schema.changes.entityType, 'module'), gt(schema.changes.createdAt, nowSec() - 7 * 86400)))
+      .all()
+      .map((r) => r.id),
+  );
 }
 
 export function updateRoutes(app: FastifyInstance) {

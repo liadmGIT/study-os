@@ -16,7 +16,7 @@ import { taskRoutes } from './routes/tasks';
 import { updateRoutes } from './routes/updates';
 
 export async function buildApp(opts: { logger?: boolean } = {}) {
-  const app = Fastify({ logger: opts.logger ?? false, trustProxy: true, bodyLimit: 2 * 1024 * 1024 });
+  const app = Fastify({ logger: opts.logger ?? false, disableRequestLogging: true, trustProxy: true, bodyLimit: 2 * 1024 * 1024 });
 
   await app.register(cookie);
 
@@ -44,7 +44,6 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   if (hasWeb) {
     await app.register(fastifyStatic, {
       root: config.webDist,
-      wildcard: false,
       setHeaders: (res, file) => {
         if (file.endsWith('sw.js') || file.endsWith('index.html')) res.header('Cache-Control', 'no-cache');
         else if (file.includes(`${path.sep}assets${path.sep}`)) res.header('Cache-Control', 'public, max-age=31536000, immutable');

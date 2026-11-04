@@ -8,7 +8,7 @@
     "dev": "concurrently -n server,web -c blue,magenta \"npm:dev:server\" \"npm:dev:web\"",
     "dev:server": "npm run dev -w server",
     "dev:web": "npm run dev -w web",
-    "dev:mock": "concurrently -n mock,server,web -c yellow,blue,magenta \"npm run mock -w server\" \"cross-env MOODLE_URL=http://localhost:4100 npm run dev -w server\" \"npm:dev:web\"",
+    "dev:mock": "concurrently -n mock,server,web -c yellow,blue,magenta \"npm run mock -w server\" \"cross-env MOODLE_URL=http://127.0.0.1:4100 npm run dev -w server\" \"npm:dev:web\"",
     "build": "npm run build -w web && npm run build -w server",
     "start": "node server/dist/index.js",
     "test": "npm test -w server",

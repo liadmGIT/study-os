@@ -11,6 +11,7 @@ import { attachment, HttpError, idParam, notFound, parse } from '../lib/http';
 import { nowSec } from '../lib/time';
 import { clientFor, getAccount } from '../moodle/account';
 import { downloadFile, localPathFor, safeName } from '../sync/files';
+import { recentlyNewModuleIds } from './updates';
 
 function absPath(rel: string): string {
   const abs = path.resolve(config.filesDir, rel);
@@ -23,6 +24,7 @@ export function fileRoutes(app: FastifyInstance) {
     const q = parse(z.object({ courseId: z.coerce.number().int().optional() }), req.query);
     const conds = [isNull(schema.files.removedAt)];
     if (q.courseId) conds.push(eq(schema.files.courseId, q.courseId));
+    const fresh = recentlyNewModuleIds();
     return db()
       .select({
         file: schema.files,
@@ -48,6 +50,7 @@ export function fileRoutes(app: FastifyInstance) {
         courseName: r.courseName,
         courseColor: r.courseColor,
         state: r.file.downloadedAt ? 'downloaded' : r.file.skippedReason ? r.file.skippedReason : 'pending',
+        isNew: fresh.has(r.file.moduleId),
       }));
   });
 
