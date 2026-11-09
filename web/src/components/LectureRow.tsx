@@ -1,45 +1,48 @@
-import { clsx } from 'clsx';
 import DOMPurify from 'dompurify';
 import { marked } from 'marked';
-import { Check, ChevronDown, CirclePlay, ExternalLink, EyeOff, Presentation, StickyNote } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { Check, ChevronDown, ExternalLink, EyeOff, Play, Presentation } from 'lucide-react';
+import { useEffect, useId, useState } from 'react';
 import { patch, post } from '../lib/api';
 import { formatDayKey, formatMinutes } from '../lib/format';
 import { useAction } from '../lib/queries';
 import type { Lecture } from '../lib/types';
-import { Badge, Button, CourseTag, Input, Progress, Segmented, Textarea } from './ui';
+import { Button, buttonClass, cn, CourseTag, Input, Segmented, Tag, Textarea } from './ui';
 
 export function renderMarkdown(md: string): string {
   return DOMPurify.sanitize(marked.parse(md, { async: false, breaks: true }) as string);
 }
 
-function LectureStatusButton({ lecture, onClick }: { lecture: Lecture; onClick: () => void }) {
-  const pct = lecture.effectiveDurationMin ? Math.min(1, lecture.positionMin / lecture.effectiveDurationMin) : 0;
+/** Ring that fills as you watch; a tick when done. Toggles watched / not watched. */
+function WatchToggle({ lecture }: { lecture: Lecture }) {
+  const update = useAction((body: Record<string, unknown>) => patch(`/api/lectures/${lecture.moduleId}`, body));
   const watched = lecture.status === 'watched';
+  const pct = lecture.effectiveDurationMin ? Math.min(1, lecture.positionMin / lecture.effectiveDurationMin) : 0;
+  const state = watched ? 'נצפתה' : lecture.status === 'in_progress' ? `בצפייה, ${Math.round(pct * 100)}%` : 'לא נצפתה';
   return (
     <button
-      onClick={onClick}
-      aria-label={watched ? 'סמן כלא נצפה' : 'סמן כנצפה'}
-      title={watched ? 'נצפה' : lecture.status === 'in_progress' ? 'בצפייה' : 'לא נצפה'}
-      className={clsx(
-        'relative flex size-7 shrink-0 items-center justify-center rounded-full transition-colors',
-        watched ? 'bg-ok text-white' : 'text-faint hover:text-ink',
-      )}
+      type="button"
+      role="checkbox"
+      aria-checked={watched ? true : lecture.status === 'in_progress' ? 'mixed' : false}
+      aria-label={`${lecture.title} – ${state}`}
+      onClick={() => update.run({ status: watched ? 'unwatched' : 'watched' })}
+      className="relative z-10 -my-2.5 -ms-2.5 flex size-11 shrink-0 items-center justify-center rounded-md md:-my-1.5 md:-ms-1.5 md:size-8"
     >
       {watched ? (
-        <Check className="size-4" strokeWidth={3} />
+        <span className="flex size-[22px] items-center justify-center rounded-full bg-green text-paper">
+          <Check className="size-3.5" strokeWidth={3} aria-hidden />
+        </span>
       ) : (
-        <svg viewBox="0 0 28 28" className="size-7 -rotate-90">
-          <circle cx="14" cy="14" r="11" fill="none" stroke="currentColor" strokeWidth="2" />
+        <svg viewBox="0 0 24 24" className="size-[22px] -rotate-90" aria-hidden>
+          <circle cx="12" cy="12" r="9.5" fill="none" stroke="var(--c-ink-3)" strokeWidth="1.5" />
           {lecture.status === 'in_progress' ? (
             <circle
-              cx="14"
-              cy="14"
-              r="11"
+              cx="12"
+              cy="12"
+              r="9.5"
               fill="none"
-              stroke="var(--color-brand)"
+              stroke="var(--c-ink)"
               strokeWidth="2.5"
-              strokeDasharray={`${Math.max(0.08, pct) * 69.1} 69.1`}
+              strokeDasharray={`${Math.max(0.06, pct) * 59.7} 59.7`}
               strokeLinecap="round"
             />
           ) : null}
@@ -51,26 +54,33 @@ function LectureStatusButton({ lecture, onClick }: { lecture: Lecture; onClick: 
 
 export function LectureRow({ lecture, showCourse = false, today }: { lecture: Lecture; showCourse?: boolean; today: string }) {
   const [open, setOpen] = useState(false);
-  const update = useAction((body: Record<string, unknown>) => patch(`/api/lectures/${lecture.moduleId}`, body));
+  const detailsId = useId();
   const opened = useAction(() => post(`/api/lectures/${lecture.moduleId}/open`));
   const watched = lecture.status === 'watched';
-  const upcoming = lecture.lectureDate && lecture.lectureDate > today;
+  const upcoming = !!lecture.lectureDate && lecture.lectureDate > today;
   const slidesHref = lecture.slides ? (lecture.slides.fileId ? `/api/files/${lecture.slides.fileId}/download?inline=1` : lecture.slides.url) : null;
 
   return (
-    <div className={clsx('rounded-xl transition-colors', open ? 'bg-sunken' : 'hover:bg-sunken', lecture.ignored && 'opacity-50')}>
-      <div className="flex items-center gap-3 px-3 py-2.5">
-        <LectureStatusButton lecture={lecture} onClick={() => update.run({ status: watched ? 'unwatched' : 'watched' })} />
-        <button className="min-w-0 flex-1 text-start" onClick={() => setOpen((x) => !x)}>
-          <div className={clsx('flex items-center gap-2 text-[14.5px] font-medium leading-snug', watched && 'text-muted')}>
-            <span className="truncate">{lecture.title}</span>
-            {lecture.type === 'tirgul' ? <Badge tone="slate">תרגול</Badge> : null}
-            {lecture.notesMd ? <StickyNote className="size-3.5 shrink-0 text-accent" aria-label="יש הערות" /> : null}
-          </div>
-          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-            {showCourse ? <CourseTag name={lecture.courseName} color={lecture.courseColor} className="max-w-44" /> : null}
+    <li className="border-b border-rule last:border-b-0">
+      <div className="flex items-start gap-3 py-3">
+        <WatchToggle lecture={lecture} />
+        <div className="min-w-0 flex-1">
+          <button
+            type="button"
+            onClick={() => setOpen((x) => !x)}
+            aria-expanded={open}
+            aria-controls={detailsId}
+            className={cn('flex w-full items-center gap-2 text-start text-[15.5px] leading-snug font-medium', (watched || lecture.ignored) && 'text-ink-3')}
+          >
+            <span className="min-w-0">{lecture.title}</span>
+            <ChevronDown className={cn('size-4 shrink-0 text-ink-3 transition-transform', open && 'rotate-180')} aria-hidden />
+          </button>
+          <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[13px] text-ink-2">
+            {showCourse ? <CourseTag name={lecture.courseName} color={lecture.courseColor} className="max-w-48" /> : null}
+            {lecture.type === 'tirgul' ? <span>תרגול</span> : null}
             {lecture.lectureDate ? <span className="tabular">{formatDayKey(lecture.lectureDate)}</span> : null}
-            {upcoming ? <Badge tone="brand">עתידית</Badge> : null}
+            {lecture.ignored ? <Tag>לא רלוונטי</Tag> : null}
+            {upcoming ? <Tag tone="blue">עוד לא התקיימה</Tag> : null}
             {lecture.status === 'in_progress' ? (
               <span className="tabular">
                 עצרת בדקה {lecture.positionMin} · נשארו {formatMinutes(lecture.remainingMin)}
@@ -78,37 +88,47 @@ export function LectureRow({ lecture, showCourse = false, today }: { lecture: Le
             ) : !watched ? (
               <span className="tabular">{formatMinutes(lecture.effectiveDurationMin)}</span>
             ) : null}
-            {lecture.completedInMoodle && !watched ? <span>נפתח ב-Moodle</span> : null}
+            {lecture.notesMd ? <span className="text-amber">יש הערות</span> : null}
+            {lecture.completedInMoodle && !watched ? <span className="text-ink-3">נפתחה במודל</span> : null}
           </div>
-          {lecture.status === 'in_progress' ? <Progress value={lecture.positionMin / lecture.effectiveDurationMin} className="mt-1.5 max-w-60" /> : null}
-        </button>
-        {slidesHref ? (
-          <a href={slidesHref} target="_blank" rel="noreferrer" title={lecture.slides!.name} className="hidden size-9 items-center justify-center rounded-xl text-muted hover:bg-surface hover:text-ink sm:inline-flex">
-            <Presentation className="size-[18px]" />
-          </a>
-        ) : null}
-        {lecture.openUrl ? (
-          <a
-            href={lecture.openUrl}
-            target="_blank"
-            rel="noreferrer"
-            onClick={() => opened.run()}
-            className="inline-flex h-9 items-center gap-1.5 rounded-xl bg-brand-soft px-3 text-[13px] font-medium text-brand hover:opacity-90"
-          >
-            <CirclePlay className="size-4" />
-            <span className="max-sm:hidden">{lecture.status === 'in_progress' ? 'המשך' : 'צפה'}</span>
-          </a>
-        ) : null}
-        <button onClick={() => setOpen((x) => !x)} aria-label="פרטים" className="text-faint hover:text-ink">
-          <ChevronDown className={clsx('size-5 transition-transform', open && 'rotate-180')} />
-        </button>
+        </div>
+        <div className="flex shrink-0 items-center gap-1">
+          {slidesHref ? (
+            <a
+              href={slidesHref}
+              target="_blank"
+              rel="noreferrer"
+              aria-label={`מצגת: ${lecture.slides!.name}`}
+              title={lecture.slides!.name}
+              className="hidden size-9 items-center justify-center rounded-md text-ink-2 hover:bg-sunken hover:text-ink sm:inline-flex"
+            >
+              <Presentation className="size-[18px]" aria-hidden />
+            </a>
+          ) : null}
+          {lecture.openUrl && !watched ? (
+            <a
+              href={lecture.openUrl}
+              target="_blank"
+              rel="noreferrer"
+              onClick={() => opened.run()}
+              aria-label={`${lecture.status === 'in_progress' ? 'המשך צפייה' : 'צפייה'}: ${lecture.title}`}
+              className={buttonClass('secondary', 'sm')}
+            >
+              <Play className="size-3.5" aria-hidden />
+              <span className="max-sm:hidden">{lecture.status === 'in_progress' ? 'המשך' : 'צפייה'}</span>
+            </a>
+          ) : null}
+        </div>
       </div>
-      {open ? <LectureDetails lecture={lecture} slidesHref={slidesHref} /> : null}
-    </div>
+      <div id={detailsId} hidden={!open}>
+        {open ? <LectureDetails lecture={lecture} slidesHref={slidesHref} /> : null}
+      </div>
+    </li>
   );
 }
 
 function LectureDetails({ lecture, slidesHref }: { lecture: Lecture; slidesHref: string | null }) {
+  const id = useId();
   const update = useAction((body: Record<string, unknown>) => patch(`/api/lectures/${lecture.moduleId}`, body));
   const saveNotes = useAction((notesMd: string) => patch(`/api/lectures/${lecture.moduleId}`, { notesMd }), { success: 'ההערות נשמרו' });
   const [position, setPosition] = useState(String(lecture.positionMin || ''));
@@ -120,62 +140,64 @@ function LectureDetails({ lecture, slidesHref }: { lecture: Lecture; slidesHref:
   }, [lecture.notesMd]);
 
   return (
-    <div className="space-y-4 border-t border-line px-3 pt-3 pb-4 sm:ps-13">
+    <div className="mb-4 ms-8 space-y-5 rounded-md bg-sunken/70 p-4 md:ms-9">
       <form
-        className="flex flex-wrap items-center gap-2 text-sm"
+        className="flex flex-wrap items-center gap-2 text-[14.5px]"
         onSubmit={(e) => {
           e.preventDefault();
-          update.run({
-            positionMin: Number(position) || 0,
-            ...(duration ? { durationMin: Number(duration) } : {}),
-          });
+          update.run({ positionMin: Number(position) || 0, ...(duration ? { durationMin: Number(duration) } : {}) });
         }}
       >
-        <span>עצרתי בדקה</span>
-        <Input type="number" min={0} inputMode="numeric" value={position} onChange={(e) => setPosition(e.target.value)} className="!h-8 w-20 text-center" />
-        <span>מתוך</span>
+        <label htmlFor={`${id}-pos`}>עצרתי בדקה</label>
+        <Input id={`${id}-pos`} type="number" min={0} inputMode="numeric" value={position} onChange={(e) => setPosition(e.target.value)} className="w-20 text-center" />
+        <label htmlFor={`${id}-dur`}>מתוך</label>
         <Input
+          id={`${id}-dur`}
           type="number"
           min={1}
           inputMode="numeric"
           value={duration}
           placeholder={String(lecture.effectiveDurationMin)}
           onChange={(e) => setDuration(e.target.value)}
-          className="!h-8 w-20 text-center"
+          className="w-20 text-center"
         />
         <span>דקות</span>
         <Button size="sm" variant="primary" loading={update.pending}>
-          שמור
+          שמירה
         </Button>
       </form>
 
       <div>
-        <div className="mb-1.5 flex items-center gap-2">
-          <span className="text-xs font-medium text-muted">הערות וסיכום</span>
+        <div className="mb-2 flex items-center gap-2">
+          <label htmlFor={`${id}-notes`} className="text-[13px] font-medium text-ink-2">
+            הערות וסיכום
+          </label>
           <div className="flex-1" />
           {notes ? (
             <Segmented
+              label="תצוגת ההערות"
               size="sm"
               value={mode}
               onChange={setMode}
               options={[
-                { value: 'view', label: 'תצוגה' },
+                { value: 'view', label: 'קריאה' },
                 { value: 'edit', label: 'עריכה' },
               ]}
             />
           ) : null}
         </div>
         {mode === 'view' && notes ? (
-          <div className="prose-he rounded-xl border border-line bg-surface p-3 text-sm" dangerouslySetInnerHTML={{ __html: renderMarkdown(notes) }} />
+          <div className="prose-he rounded-md border border-rule bg-surface p-4 text-[14.5px]" dangerouslySetInnerHTML={{ __html: renderMarkdown(notes) }} />
         ) : (
           <>
             <Textarea
+              id={`${id}-notes`}
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder={'מה למדנו? שאלות פתוחות?\nאפשר להשתמש ב-Markdown: # כותרת, - רשימה, **מודגש**'}
-              className="min-h-32 font-normal"
+              placeholder={'מה למדנו? מה לא ברור?\nאפשר Markdown: # כותרת, - רשימה, **הדגשה**'}
+              className="min-h-36"
             />
-            <div className="mt-2 flex gap-2">
+            <div className="mt-2">
               <Button
                 size="sm"
                 variant="primary"
@@ -186,30 +208,30 @@ function LectureDetails({ lecture, slidesHref }: { lecture: Lecture; slidesHref:
                   if (notes) setMode('view');
                 }}
               >
-                שמור הערות
+                שמירת ההערות
               </Button>
             </div>
           </>
         )}
       </div>
 
-      <div className="flex flex-wrap items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2 border-t border-rule pt-3">
         {lecture.url ? (
-          <a href={lecture.url} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-[13px]">
-            <ExternalLink className="size-3.5" />
-            ב-Moodle
+          <a href={lecture.url} target="_blank" rel="noreferrer" className={buttonClass('ghost', 'sm')}>
+            <ExternalLink className="size-3.5" aria-hidden />
+            במודל
           </a>
         ) : null}
         {slidesHref ? (
-          <a href={slidesHref} target="_blank" rel="noreferrer" className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-[13px]">
-            <Presentation className="size-3.5" />
+          <a href={slidesHref} target="_blank" rel="noreferrer" className={buttonClass('ghost', 'sm')}>
+            <Presentation className="size-3.5" aria-hidden />
             {lecture.slides!.name}
           </a>
         ) : null}
         <div className="flex-1" />
         <Button size="sm" variant="ghost" onClick={() => update.run({ ignored: !lecture.ignored })}>
-          <EyeOff className="size-3.5" />
-          {lecture.ignored ? 'החזר למעקב' : 'לא רלוונטי'}
+          <EyeOff className="size-3.5" aria-hidden />
+          {lecture.ignored ? 'להחזיר למעקב' : 'לא רלוונטי לי'}
         </Button>
       </div>
     </div>

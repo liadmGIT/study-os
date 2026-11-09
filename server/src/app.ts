@@ -6,6 +6,7 @@ import Fastify from 'fastify';
 import { registerAuth } from './auth';
 import { config } from './config';
 import { HttpError } from './lib/http';
+import { backupRoutes } from './routes/backup';
 import { courseRoutes } from './routes/courses';
 import { dashboardRoutes } from './routes/dashboard';
 import { fileRoutes } from './routes/files';
@@ -43,6 +44,7 @@ export async function buildApp(opts: { logger?: boolean } = {}) {
   updateRoutes(app);
   fileRoutes(app);
   settingsRoutes(app);
+  backupRoutes(app);
 
   // The built web app; any non-API path falls back to index.html (client-side routing).
   const hasWeb = fs.existsSync(path.join(config.webDist, 'index.html'));

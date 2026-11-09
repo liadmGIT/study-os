@@ -123,3 +123,45 @@ export function fromLocalInput(value: string): number | null {
   ts = guess - offset(ts);
   return Math.floor(ts / 1000);
 }
+
+/* ---------- Hebrew calendar ---------- */
+
+const GEMATRIA: [number, string][] = [
+  [400, 'ת'], [300, 'ש'], [200, 'ר'], [100, 'ק'], [90, 'צ'], [80, 'פ'], [70, 'ע'], [60, 'ס'], [50, 'נ'],
+  [40, 'מ'], [30, 'ל'], [20, 'כ'], [10, 'י'], [9, 'ט'], [8, 'ח'], [7, 'ז'], [6, 'ו'], [5, 'ה'], [4, 'ד'], [3, 'ג'], [2, 'ב'], [1, 'א'],
+];
+
+/** 29 → כ״ט, 15 → ט״ו, 5787 → תשפ״ז (thousands dropped, as usual). */
+export function gematria(n: number): string {
+  let rest = n % 1000;
+  let letters = '';
+  while (rest > 0) {
+    if (rest === 15 || rest === 16) {
+      letters += rest === 15 ? 'טו' : 'טז';
+      break;
+    }
+    const [value, letter] = GEMATRIA.find(([v]) => v <= rest)!;
+    letters += letter;
+    rest -= value;
+  }
+  return letters.length === 1 ? `${letters}׳` : `${letters.slice(0, -1)}״${letters.slice(-1)}`;
+}
+
+const hebrewParts = new Intl.DateTimeFormat('he-u-ca-hebrew', { timeZone: TZ, day: 'numeric', month: 'long', year: 'numeric' });
+
+/** "כ״ט בחשוון תשפ״ז" for a day key. */
+export function formatHebrewDate(key: string, withYear = false): string {
+  const parts = hebrewParts.formatToParts(keyToDate(key));
+  const get = (t: string) => parts.find((p) => p.type === t)?.value ?? '';
+  const day = gematria(Number(get('day')));
+  const month = get('month');
+  return withYear ? `${day} ב${month} ${gematria(Number(get("year")))}` : `${day} ב${month}`;
+}
+
+export function hebrewYear(): string {
+  const parts = hebrewParts.formatToParts(new Date());
+  return gematria(Number(parts.find((p) => p.type === 'year')?.value ?? 0));
+}
+
+export const formatDayMonth = (key: string) => new Intl.DateTimeFormat('he-IL', { timeZone: TZ, day: 'numeric', month: 'long' }).format(keyToDate(key));
+export const dayOfMonth = (key: string) => Number(key.slice(8, 10));

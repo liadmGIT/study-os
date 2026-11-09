@@ -1,32 +1,7 @@
-import { CalendarClock, CheckCheck, FileText, GraduationCap, ListPlus, Megaphone, PlayCircle, Sparkles } from 'lucide-react';
 import { Link } from 'react-router';
 import { formatAgo, formatShortDate } from '../lib/format';
-import { CHANGE } from '../lib/labels';
+import { CHANGE, TONE_COLOR } from '../lib/labels';
 import type { Change } from '../lib/types';
-import { CourseTag } from './ui';
-
-const ICONS = {
-  course_new: Sparkles,
-  task_new: ListPlus,
-  due_changed: CalendarClock,
-  submitted: CheckCheck,
-  grade_new: GraduationCap,
-  recording_new: PlayCircle,
-  file_new: FileText,
-  file_updated: FileText,
-  module_new: Sparkles,
-  announcement_new: Megaphone,
-};
-
-const toneColor: Record<string, string> = {
-  red: 'var(--color-overdue)',
-  orange: 'var(--color-urgent)',
-  amber: 'var(--color-week)',
-  green: 'var(--color-ok)',
-  brand: 'var(--color-brand)',
-  slate: 'var(--color-later)',
-  neutral: 'var(--color-muted)',
-};
 
 export function changeLink(c: Change): string {
   if (c.entityType === 'task') return `?open=${c.entityId}`;
@@ -36,31 +11,36 @@ export function changeLink(c: Change): string {
   return '/courses';
 }
 
+/** One line in the "what changed" log: kind in its colour, then what, then where and when. */
 export function ChangeItem({ change }: { change: Change }) {
   const meta = CHANGE[change.type];
-  const Icon = ICONS[change.type] ?? Sparkles;
+  const color = TONE_COLOR[meta.tone];
   const p = change.payload as { from?: number; to?: number; grade?: string };
   return (
-    <Link to={changeLink(change)} className="flex gap-3 rounded-xl px-3 py-2.5 hover:bg-sunken">
-      <span className="mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-lg" style={{ background: `color-mix(in srgb, ${toneColor[meta.tone]} 14%, transparent)`, color: toneColor[meta.tone] }}>
-        <Icon className="size-4" />
-      </span>
-      <div className="min-w-0 flex-1">
-        <div className="flex items-baseline gap-2">
-          <span className="text-xs font-medium" style={{ color: toneColor[meta.tone] }}>
-            {meta.label}
-          </span>
-          <span className="text-[11px] text-faint">{formatAgo(change.createdAt)}</span>
-        </div>
-        <div className="truncate text-sm">{change.title}</div>
-        {change.type === 'due_changed' && p.from && p.to ? (
-          <div className="text-xs text-muted tabular">
-            {formatShortDate(p.from)} ← {formatShortDate(p.to)}
+    <li className="border-b border-rule last:border-b-0">
+      <Link to={changeLink(change)} className="group flex gap-3 py-3">
+        <span aria-hidden className="mt-1 w-[3px] shrink-0 self-stretch rounded-full" style={{ background: color }} />
+        <div className="min-w-0 flex-1">
+          <div className="flex items-baseline gap-2 text-[13px]">
+            <span className="font-medium" style={{ color }}>
+              {meta.label}
+            </span>
+            <span className="text-ink-3">
+              <time dateTime={new Date(change.createdAt * 1000).toISOString()}>{formatAgo(change.createdAt)}</time>
+            </span>
           </div>
-        ) : null}
-        {change.type === 'grade_new' && p.grade ? <div className="text-xs text-muted">{p.grade}</div> : null}
-        {change.course ? <CourseTag name={change.course.name} color={change.course.color} className="mt-0.5" /> : null}
-      </div>
-    </Link>
+          <div className="text-[15px] leading-snug group-hover:underline group-hover:decoration-rule-strong group-hover:underline-offset-4">{change.title}</div>
+          <div className="mt-0.5 flex flex-wrap gap-x-3 text-[13px] text-ink-2">
+            {change.course ? <span>{change.course.name}</span> : null}
+            {change.type === 'due_changed' && p.from && p.to ? (
+              <span className="tabular">
+                {formatShortDate(p.from)} ← {formatShortDate(p.to)}
+              </span>
+            ) : null}
+            {change.type === 'grade_new' && p.grade ? <span>{p.grade}</span> : null}
+          </div>
+        </div>
+      </Link>
+    </li>
   );
 }

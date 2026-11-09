@@ -1,12 +1,10 @@
-import { clsx } from 'clsx';
-import { CalendarPlus, ChevronLeft, ChevronRight, CirclePlay, Flag, GripVertical } from 'lucide-react';
-import { useState } from 'react';
+import { CalendarPlus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { useState, type CSSProperties, type DragEvent } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { useOpenTask } from '../components/Layout';
-import { Button, Card, PageHeader, PageLoader } from '../components/ui';
+import { buttonClass, cn, CourseMark, IconButton, PageHeader, PageLoader } from '../components/ui';
 import { patch } from '../lib/api';
-import { formatDayKey, formatMinutes, formatTime, formatWeekday, formatWeekdayShort } from '../lib/format';
-import { BUCKETS } from '../lib/labels';
+import { dayOfMonth, formatDayMonth, formatMinutes, formatTime, formatWeekday } from '../lib/format';
 import { useAction, useWeek } from '../lib/queries';
 import type { PlanItem, Task } from '../lib/types';
 
@@ -19,176 +17,194 @@ export function WeekPage() {
 
   if (q.isLoading || !q.data) return <PageLoader />;
   const w = q.data;
-  const go = (s: string) => {
-    params.set('start', s);
+  const go = (s: string | null) => {
+    if (s) params.set('start', s);
+    else params.delete('start');
     setParams(params, { replace: true });
   };
-  const onDrop = (date: string | null) => (e: React.DragEvent) => {
-    e.preventDefault();
-    setDragOver(null);
-    const id = Number(e.dataTransfer.getData('text/task-id'));
-    if (id) plan.run(id, date);
-  };
   const dropProps = (date: string | null) => ({
-    onDragOver: (e: React.DragEvent) => {
+    onDragOver: (e: DragEvent) => {
       if (e.dataTransfer.types.includes('text/task-id')) {
         e.preventDefault();
         setDragOver(date ?? 'tray');
       }
     },
     onDragLeave: () => setDragOver(null),
-    onDrop: onDrop(date),
+    onDrop: (e: DragEvent) => {
+      e.preventDefault();
+      setDragOver(null);
+      const id = Number(e.dataTransfer.getData('text/task-id'));
+      if (id) plan.run(id, date);
+    },
   });
+  const isCurrentWeek = w.days.some((d) => d.date === w.today);
 
   return (
     <div>
       <PageHeader
-        title="השבוע"
-        subtitle={`${formatDayKey(w.days[0].date)} – ${formatDayKey(w.days[6].date)}`}
+        eyebrow={`${formatDayMonth(w.days[0].date)} – ${formatDayMonth(w.days[6].date)}`}
+        title={isCurrentWeek ? 'השבוע' : 'שבוע'}
         actions={
           <>
-            <Button size="sm" variant="ghost" onClick={() => go(w.prev)} aria-label="שבוע קודם">
-              <ChevronRight className="size-4" />
-              קודם
-            </Button>
-            {!w.days.some((d) => d.date === w.today) ? (
-              <Button size="sm" onClick={() => (params.delete('start'), setParams(params, { replace: true }))}>
-                היום
-              </Button>
+            <IconButton label="שבוע קודם" onClick={() => go(w.prev)}>
+              <ChevronRight className="size-5" aria-hidden />
+            </IconButton>
+            {!isCurrentWeek ? (
+              <button type="button" onClick={() => go(null)} className={buttonClass('secondary', 'sm')}>
+                חזרה להיום
+              </button>
             ) : null}
-            <Button size="sm" variant="ghost" onClick={() => go(w.next)} aria-label="שבוע הבא">
-              הבא
-              <ChevronLeft className="size-4" />
-            </Button>
-            <Link to="/settings#calendar" className="inline-flex h-8 items-center gap-1.5 rounded-xl border border-line bg-surface px-2.5 text-[13px] font-medium">
-              <CalendarPlus className="size-4" />
-              <span className="max-sm:hidden">חבר ל-Google Calendar</span>
+            <IconButton label="שבוע הבא" onClick={() => go(w.next)}>
+              <ChevronLeft className="size-5" aria-hidden />
+            </IconButton>
+            <Link to="/settings#calendar" className={cn(buttonClass('ghost', 'sm'), 'ms-2')}>
+              <CalendarPlus className="size-4" aria-hidden />
+              <span className="max-sm:hidden">לחבר ליומן גוגל</span>
             </Link>
           </>
         }
       />
 
-      <div className="grid gap-3 lg:grid-cols-7">
+      {/* A planner spread: seven columns on desktop, a list of days on phones. */}
+      <ol className="rise grid border-t-2 border-ink lg:grid-cols-7 lg:divide-x lg:divide-x-reverse lg:divide-rule" style={{ '--i': 1 } as CSSProperties} aria-label="ימי השבוע">
         {w.days.map((day) => {
           const isToday = day.date === w.today;
           const past = day.date < w.today;
           const planned = day.planned.filter((t) => !day.deadlines.some((d) => d.id === t.id));
           const load = day.lectures.reduce((s, i) => s + i.minutes, 0);
+          const empty = !day.deadlines.length && !planned.length && !day.lectures.length;
           return (
-            <div
+            <li
               key={day.date}
               {...dropProps(day.date)}
-              className={clsx(
-                'flex min-h-28 flex-col rounded-2xl border bg-surface p-2 transition-colors lg:min-h-[420px]',
-                isToday ? 'border-brand' : 'border-line',
-                dragOver === day.date && 'bg-brand-soft',
-                past && 'opacity-70',
+              aria-current={isToday ? 'date' : undefined}
+              className={cn(
+                'flex flex-col border-b border-rule px-1 py-4 transition-colors lg:min-h-[460px] lg:border-b-0 lg:px-3',
+                dragOver === day.date && 'bg-blue/8',
+                isToday && 'bg-surface/70',
               )}
             >
-              <div className="mb-2 flex items-baseline gap-2 px-1.5 pt-1">
-                <span className={clsx('text-sm font-semibold', isToday && 'text-brand')}>
-                  <span className="lg:hidden">{formatWeekday(day.date)}</span>
-                  <span className="hidden lg:inline">{formatWeekdayShort(day.date)}</span>
+              <div className="mb-3 flex items-baseline gap-2.5 lg:flex-col lg:gap-0">
+                <span className={cn('display text-[30px] leading-none tabular', isToday ? 'text-accent' : past && 'text-ink-3')}>
+                  <span className={cn(isToday && 'pen-underline')}>{dayOfMonth(day.date)}</span>
                 </span>
-                <span className="text-xs text-muted tabular">{formatDayKey(day.date)}</span>
-                {isToday ? <span className="rounded-md bg-brand px-1.5 text-[10px] font-semibold text-canvas">היום</span> : null}
+                <span className={cn('text-[14px] lg:mt-1.5', isToday ? 'font-semibold text-ink' : past ? 'text-ink-3' : 'text-ink-2')}>
+                  {formatWeekday(day.date)}
+                  {isToday ? ' · היום' : ''}
+                </span>
               </div>
-              <div className="flex flex-1 flex-col gap-1.5">
+              <ul className="flex flex-1 flex-col gap-2">
                 {day.deadlines.map((t) => (
-                  <DeadlineChip key={`d${t.id}`} task={t} />
+                  <Deadline key={`d${t.id}`} task={t} />
                 ))}
                 {planned.map((t) => (
-                  <PlannedChip key={`p${t.id}`} task={t} />
+                  <Planned key={`p${t.id}`} task={t} />
                 ))}
                 {day.lectures.map((i) => (
                   <LectureBlock key={`${i.moduleId}-${i.part}`} item={i} />
                 ))}
-                {!day.deadlines.length && !planned.length && !day.lectures.length ? (
-                  <div className="hidden flex-1 items-center justify-center text-xs text-faint lg:flex">גרור לכאן</div>
-                ) : null}
-              </div>
-              {load ? <div className="mt-2 px-1.5 text-[11px] text-faint">הרצאות: {formatMinutes(load)}</div> : null}
-            </div>
+                {empty ? <li className="text-[13px] text-ink-3 lg:pt-1">{past ? '—' : 'פנוי'}</li> : null}
+              </ul>
+              {load ? <p className="mt-3 text-[12.5px] text-ink-3">הרצאות: {formatMinutes(load)}</p> : null}
+            </li>
           );
         })}
-      </div>
+      </ol>
 
-      <Card className={clsx('mt-5 p-3 transition-colors', dragOver === 'tray' && 'bg-brand-soft')} {...dropProps(null)}>
-        <div className="mb-2 px-1 text-sm font-semibold">
-          לא משובץ <span className="font-normal text-muted">· גרור משימה ליום שבו תעבוד עליה (בטלפון: פתח את המשימה ובחר יום)</span>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {w.unscheduled.length ? (
-            w.unscheduled.map((t) => <PlannedChip key={t.id} task={t} wide />)
-          ) : (
-            <span className="px-1 text-sm text-muted">הכול משובץ.</span>
-          )}
-        </div>
-      </Card>
+      <section
+        aria-labelledby="unscheduled"
+        {...dropProps(null)}
+        className={cn('rise mt-10 border-t border-rule pt-4 transition-colors', dragOver === 'tray' && 'bg-blue/8')}
+        style={{ '--i': 2 } as CSSProperties}
+      >
+        <h2 id="unscheduled" className="display text-[19px]">
+          לא משובץ
+        </h2>
+        <p className="mb-3 text-[13.5px] text-ink-2">גוררים משימה ליום שבו תעבדו עליה. בטלפון: פותחים את המשימה ובוחרים "מתי לעבוד על זה".</p>
+        {w.unscheduled.length ? (
+          <ul className="flex flex-wrap gap-2">
+            {w.unscheduled.map((t) => (
+              <Planned key={t.id} task={t} wide />
+            ))}
+          </ul>
+        ) : (
+          <p className="text-[14px] text-ink-3">הכול משובץ.</p>
+        )}
+      </section>
     </div>
   );
 }
 
-function DeadlineChip({ task }: { task: Task }) {
+function dragProps(task: Task) {
+  return {
+    draggable: true,
+    onDragStart: (e: DragEvent) => {
+      e.dataTransfer.setData('text/task-id', String(task.id));
+      e.dataTransfer.effectAllowed = 'move';
+    },
+  };
+}
+
+function Deadline({ task }: { task: Task }) {
   const open = useOpenTask();
   const finished = task.status === 'done' || task.status === 'submitted';
   return (
-    <button
-      onClick={() => open(task.id)}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/task-id', String(task.id))}
-      className={clsx('rounded-xl border px-2.5 py-2 text-start text-[13px] transition-colors hover:bg-sunken', finished ? 'border-line text-muted' : 'border-transparent')}
-      style={finished ? undefined : { background: `color-mix(in srgb, ${BUCKETS[task.urgency.bucket].color} 10%, transparent)` }}
-    >
-      <div className="flex items-center gap-1.5 text-[11px] font-medium" style={{ color: finished ? undefined : BUCKETS[task.urgency.bucket].color }}>
-        <Flag className="size-3" />
-        {finished ? 'הוגש' : 'הגשה'} {task.dueAt ? formatTime(task.dueAt) : ''}
-      </div>
-      <div className={clsx('mt-0.5 leading-snug font-medium', finished && 'line-through')}>{task.title}</div>
-      {task.course ? (
-        <div className="mt-1 flex items-center gap-1 text-[11px] text-muted">
-          <span className="size-1.5 rounded-full" style={{ background: task.course.color }} />
-          <span className="truncate">{task.course.name}</span>
-        </div>
-      ) : null}
-    </button>
+    <li>
+      <button
+        type="button"
+        onClick={() => open(task.id)}
+        {...dragProps(task)}
+        className={cn(
+          'block w-full border-s-2 py-1 ps-2.5 text-start transition-colors hover:bg-sunken/70',
+          finished ? 'border-green' : 'border-accent',
+        )}
+      >
+        <span className={cn('block text-[12.5px] font-medium tabular', finished ? 'text-green' : 'text-accent')}>
+          {finished ? 'הוגש' : 'הגשה'} · {task.dueAt ? formatTime(task.dueAt) : ''}
+        </span>
+        <span className={cn('block text-[14px] leading-snug', finished && 'text-ink-3 line-through')}>{task.title}</span>
+        {task.course ? <span className="block truncate text-[12.5px] text-ink-2">{task.course.name}</span> : null}
+      </button>
+    </li>
   );
 }
 
-function PlannedChip({ task, wide }: { task: Task; wide?: boolean }) {
+function Planned({ task, wide }: { task: Task; wide?: boolean }) {
   const open = useOpenTask();
   return (
-    <button
-      onClick={() => open(task.id)}
-      draggable
-      onDragStart={(e) => e.dataTransfer.setData('text/task-id', String(task.id))}
-      className={clsx('flex cursor-grab items-start gap-1.5 rounded-xl border border-line bg-surface px-2 py-1.5 text-start text-[13px] hover:bg-sunken active:cursor-grabbing', wide && 'max-w-xs')}
-    >
-      <GripVertical className="mt-0.5 size-3.5 shrink-0 text-faint" />
-      <span className="min-w-0">
-        <span className="block leading-snug">{task.title}</span>
-        {task.course ? (
-          <span className="mt-0.5 flex items-center gap-1 text-[11px] text-muted">
-            <span className="size-1.5 rounded-full" style={{ background: task.course.color }} />
-            <span className="truncate">{task.course.name}</span>
-          </span>
-        ) : null}
-      </span>
-    </button>
+    <li>
+      <button
+        type="button"
+        onClick={() => open(task.id)}
+        {...dragProps(task)}
+        className={cn(
+          'flex w-full cursor-grab items-start gap-2 rounded-md border border-rule-strong bg-surface px-2.5 py-1.5 text-start hover:border-ink-3 active:cursor-grabbing',
+          wide && 'w-auto max-w-xs',
+        )}
+      >
+        {task.course ? <CourseMark color={task.course.color} className="mt-1" /> : null}
+        <span className="min-w-0">
+          <span className="block text-[14px] leading-snug">{task.title}</span>
+          {task.course ? <span className="block truncate text-[12.5px] text-ink-2">{task.course.name}</span> : null}
+        </span>
+      </button>
+    </li>
   );
 }
 
 function LectureBlock({ item }: { item: PlanItem }) {
   return (
-    <Link to={`/lectures?course=${item.courseId}`} className="flex items-start gap-1.5 rounded-xl bg-sunken px-2 py-1.5 text-[13px] hover:opacity-80">
-      <CirclePlay className="mt-0.5 size-3.5 shrink-0" style={{ color: item.course?.color }} />
-      <span className="min-w-0">
-        <span className="block leading-snug">{item.title}</span>
-        <span className="text-[11px] text-muted tabular">
-          {formatMinutes(item.minutes)}
-          {item.parts > 1 ? ` · חלק ${item.part}/${item.parts}` : ''}
+    <li>
+      <Link to={`/lectures?course=${item.courseId}`} className="flex items-start gap-2 rounded-md px-1 py-1 text-start hover:bg-sunken/70">
+        <CourseMark color={item.course?.color ?? 'var(--c-ink-3)'} className="mt-1 opacity-60" />
+        <span className="min-w-0">
+          <span className="block text-[13.5px] leading-snug text-ink-2">{item.title}</span>
+          <span className="block text-[12.5px] text-ink-3 tabular">
+            {formatMinutes(item.minutes)}
+            {item.parts > 1 ? ` · חלק ${item.part}/${item.parts}` : ''}
+          </span>
         </span>
-      </span>
-    </Link>
+      </Link>
+    </li>
   );
 }

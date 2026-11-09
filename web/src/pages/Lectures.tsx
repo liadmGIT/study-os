@@ -1,22 +1,29 @@
-import { CalendarDays, CirclePlay } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { X } from 'lucide-react';
+import { useMemo, type CSSProperties } from 'react';
 import { Link, useSearchParams } from 'react-router';
 import { LectureRow } from '../components/LectureRow';
-import { Card, CardHeader, Chip, CourseTag, Empty, PageHeader, PageLoader, Progress, SectionTitle, Segmented } from '../components/ui';
-import { formatMinutes, formatWeekdayShort, formatDayKey } from '../lib/format';
-import { useLectures } from '../lib/queries';
-import { useQuery } from '@tanstack/react-query';
+import { cn, CourseMark, Empty, GroupLabel, PageHeader, PageLoader, Progress, Section, Tabs } from '../components/ui';
 import { get } from '../lib/api';
+import { dayOfMonth, formatMinutes, formatWeekday } from '../lib/format';
+import { useLectures } from '../lib/queries';
+import { usePref } from '../lib/storage';
 import type { Lecture, PlanDay } from '../lib/types';
 
 type Show = 'pending' | 'all' | 'notes';
+const SHOWS = ['pending', 'all', 'notes'] as const;
 
 export function LecturesPage() {
   const q = useLectures();
   const plan = useQuery({ queryKey: ['plan'], queryFn: () => get<{ days: PlanDay[]; unscheduledMin: number; dailyMin: number }>('/api/lectures/plan?days=7') });
   const [params, setParams] = useSearchParams();
-  const [show, setShow] = useState<Show>('pending');
+  const [show, setShow] = usePref<Show>('lectures.show', 'pending', SHOWS);
   const courseId = params.get('course') ? Number(params.get('course')) : null;
+  const setCourse = (id: number | null) => {
+    if (id) params.set('course', String(id));
+    else params.delete('course');
+    setParams(params, { replace: true });
+  };
 
   const lectures = useMemo(() => {
     let list = q.data?.lectures ?? [];
@@ -26,7 +33,7 @@ export function LecturesPage() {
     return list;
   }, [q.data, courseId, show]);
 
-  // Group by course, then by week/section.
+  // Course → week → lectures
   const grouped = useMemo(() => {
     const byCourse = new Map<number, { name: string; color: string; sections: Map<string, Lecture[]> }>();
     for (const l of lectures) {
@@ -40,130 +47,187 @@ export function LecturesPage() {
 
   if (q.isLoading || !q.data) return <PageLoader />;
   const lag = q.data.lag;
-  const nameOf = new Map(lag.map((l) => [l.courseId, l]));
+  const behind = lag.reduce((s, l) => s + l.behind, 0);
+  const behindMin = lag.reduce((s, l) => s + l.behindMin, 0);
+  const courseName = courseId ? lag.find((l) => l.courseId === courseId)?.courseName : null;
 
   return (
     <div>
-      <PageHeader title="מעקב הרצאות" subtitle="כל ההקלטות מכל הקורסים: מה ראית, איפה עצרת, ומה מחכה" />
+      <PageHeader
+        eyebrow={behind ? `${behind} מחכות · בערך ${formatMinutes(behindMin)}` : 'אתה מעודכן בכל הקורסים'}
+        title="הרצאות"
+        subtitle="כל ההקלטות מכל הקורסים: מה כבר ראית, איפה עצרת, ומה מחכה."
+      />
 
-      <div className="mb-5 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {lag.map((l) => (
-          <button
-            key={l.courseId}
-            onClick={() => {
-              if (courseId === l.courseId) params.delete('course');
-              else params.set('course', String(l.courseId));
-              setParams(params, { replace: true });
-            }}
-            className={`rounded-2xl border bg-surface p-4 text-start transition-colors hover:bg-sunken ${courseId === l.courseId ? 'border-brand' : 'border-line'}`}
-          >
-            <CourseTag name={l.courseName} color={l.color} className="!text-sm !text-ink font-medium" />
-            <div className="mt-3 flex items-end gap-2">
-              <span className="text-2xl font-bold tabular leading-none">{l.behind}</span>
-              <span className="pb-0.5 text-xs text-muted">{l.behind ? `מאחור · ${formatMinutes(l.behindMin)}` : 'אתה מעודכן'}</span>
-            </div>
-            <Progress value={l.total ? l.watched / l.total : 0} color={l.color} className="mt-3" />
-            <div className="mt-1 text-[11px] text-faint tabular">
-              {l.watched} מתוך {l.total} נצפו
-            </div>
-          </button>
-        ))}
-      </div>
+      {/* Per-course progress as a small table */}
+      {lag.length ? (
+        <div className="rise mb-10" style={{ '--i': 1 } as CSSProperties}>
+          <table className="w-full border-collapse text-[14.5px]">
+            <caption className="sr-only">התקדמות בצפייה לפי קורס. בחירת קורס מסננת את הרשימה.</caption>
+            <thead>
+              <tr className="border-b-2 border-ink text-start text-[12.5px] text-ink-3">
+                <th scope="col" className="py-2 text-start font-medium">
+                  קורס
+                </th>
+                <th scope="col" className="hidden w-[30%] py-2 text-start font-medium sm:table-cell">
+                  התקדמות
+                </th>
+                <th scope="col" className="py-2 text-end font-medium">
+                  נצפו
+                </th>
+                <th scope="col" className="py-2 text-end font-medium">
+                  מחכות
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {lag.map((l) => {
+                const selected = courseId === l.courseId;
+                return (
+                  <tr key={l.courseId} className={cn('border-b border-rule', selected && 'bg-sunken/70')}>
+                    <th scope="row" className="py-0 text-start font-normal">
+                      <button
+                        type="button"
+                        aria-pressed={selected}
+                        onClick={() => setCourse(selected ? null : l.courseId)}
+                        className="flex min-h-12 w-full items-center gap-2.5 text-start hover:underline hover:underline-offset-4"
+                      >
+                        <CourseMark color={l.color} />
+                        <span className={cn(selected && 'font-semibold')}>{l.courseName}</span>
+                      </button>
+                    </th>
+                    <td className="hidden py-3 pe-6 sm:table-cell">
+                      <Progress value={l.total ? l.watched / l.total : 0} color={l.color} label={`${l.courseName}: התקדמות`} />
+                    </td>
+                    <td className="py-3 text-end text-ink-2 tabular">
+                      {l.watched}/{l.total}
+                    </td>
+                    <td className={cn('py-3 text-end tabular', l.behind ? 'font-semibold text-accent' : 'text-green')}>{l.behind || (
+                        <>
+                          <span aria-hidden>✓</span>
+                          <span className="sr-only">אין</span>
+                        </>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      ) : null}
 
-      <div className="grid gap-5 lg:grid-cols-3">
-        <div className="lg:col-span-2">
-          <div className="mb-3 flex flex-wrap items-center gap-2">
-            <Segmented<Show>
+      <div className="grid gap-x-12 gap-y-10 lg:grid-cols-12">
+        <div className="lg:col-span-8">
+          <div className="mb-4 flex flex-wrap items-end gap-3">
+            <Tabs<Show>
+              label="מה להציג"
               value={show}
               onChange={setShow}
+              className="flex-1"
               options={[
                 { value: 'pending', label: 'מחכות לצפייה' },
                 { value: 'all', label: 'הכול' },
                 { value: 'notes', label: 'עם הערות' },
               ]}
             />
-            {courseId ? (
-              <Chip active onClick={() => (params.delete('course'), setParams(params, { replace: true }))}>
-                {nameOf.get(courseId)?.courseName ?? 'קורס'} ✕
-              </Chip>
+            {courseName ? (
+              <button
+                type="button"
+                onClick={() => setCourse(null)}
+                className="mb-1.5 inline-flex h-9 items-center gap-1.5 rounded-full border border-ink bg-ink px-3 text-[13.5px] text-paper"
+                aria-label={`הסר סינון: ${courseName}`}
+              >
+                {courseName}
+                <X className="size-3.5" aria-hidden />
+              </button>
             ) : null}
           </div>
+
           {!grouped.length ? (
-            <Card>
-              <Empty icon={<CirclePlay className="size-8" />} title={show === 'pending' ? 'ראית הכול 🎉' : 'אין הרצאות להצגה'}>
-                {show === 'pending' ? 'אין הקלטות שמחכות לך.' : 'הקלטות שמתפרסמות במודל יופיעו כאן אוטומטית. אם משהו לא זוהה, אפשר לסמן אותו כהקלטה בעמוד הקורס.'}
-              </Empty>
-            </Card>
+            <Empty title={show === 'pending' ? 'ראית את כל ההקלטות' : 'אין הרצאות להצגה'} className="border-b border-rule">
+              {show === 'pending'
+                ? 'אין כרגע הקלטות שמחכות לך.'
+                : 'הקלטות שמתפרסמות במודל יופיעו כאן לבד. אם משהו לא זוהה, אפשר לסמן אותו כהקלטה בעמוד הקורס.'}
+            </Empty>
           ) : (
-            <div className="space-y-4">
-              {grouped.map(([cid, c]) => (
-                <Card key={cid} className="p-2 sm:p-3">
-                  <div className="flex items-center gap-2 px-2 pt-1 pb-2">
-                    <span className="size-2.5 rounded-full" style={{ background: c.color }} />
-                    <Link to={`/courses/${cid}`} className="font-semibold hover:underline">
+            <div className="space-y-10">
+              {grouped.map(([cid, c], i) => (
+                <section key={cid} aria-labelledby={`course-${cid}`} className="rise" style={{ '--i': i + 2 } as CSSProperties}>
+                  <h2 id={`course-${cid}`} className="display mb-1 flex items-center gap-2.5 text-[21px]">
+                    <CourseMark color={c.color} className="h-5 w-1" />
+                    <Link to={`/courses/${cid}`} className="hover:underline hover:underline-offset-4">
                       {c.name}
                     </Link>
-                  </div>
+                  </h2>
                   {[...c.sections.entries()].map(([section, list]) => (
                     <div key={section}>
-                      <SectionTitle count={list.length}>
-                        <span className="px-1">{section}</span>
-                      </SectionTitle>
-                      {list.map((l) => (
-                        <LectureRow key={l.moduleId} lecture={l} today={q.data!.today} />
-                      ))}
+                      <GroupLabel level={3} count={list.length}>
+                        {section}
+                      </GroupLabel>
+                      <ul aria-label={`${c.name}, ${section}`}>
+                        {list.map((l) => (
+                          <LectureRow key={l.moduleId} lecture={l} today={q.data!.today} />
+                        ))}
+                      </ul>
                     </div>
                   ))}
-                </Card>
+                </section>
               ))}
             </div>
           )}
         </div>
 
-        <div>
-          <Card className="lg:sticky lg:top-6">
-            <CardHeader
+        <aside className="lg:col-span-4" aria-label="תוכנית השלמה">
+          <div className="lg:sticky lg:top-8">
+            <Section
+              i={2}
               title="תוכנית השלמה"
-              subtitle={plan.data ? `עד ${formatMinutes(plan.data.dailyMin)} ביום · אפשר לשנות בהגדרות` : undefined}
-              icon={<CalendarDays className="size-[18px]" />}
-            />
-            <div className="space-y-3 px-4 pb-4">
-              {plan.data?.days.filter((d) => d.items.length).length ? (
-                plan.data.days
-                  .filter((d) => d.items.length)
-                  .map((d) => (
-                    <div key={d.date}>
-                      <div className="mb-1 flex items-baseline gap-2 text-xs">
-                        <span className="font-semibold">{formatWeekdayShort(d.date)}</span>
-                        <span className="text-muted tabular">{formatDayKey(d.date)}</span>
-                        <span className="flex-1" />
-                        <span className="text-faint tabular">{formatMinutes(d.totalMin)}</span>
-                      </div>
-                      <ul className="space-y-1">
-                        {d.items.map((i) => {
-                          const c = nameOf.get(i.courseId);
-                          return (
-                            <li key={`${i.moduleId}-${i.part}`} className="flex items-center gap-2 rounded-lg bg-sunken px-2.5 py-1.5 text-sm">
-                              <span className="size-2 shrink-0 rounded-full" style={{ background: c?.color }} />
-                              <span className="min-w-0 flex-1 truncate">{i.title}</span>
-                              <span className="text-[11px] text-muted tabular">
-                                {i.minutes}′{i.parts > 1 ? ` · ${i.part}/${i.parts}` : ''}
-                              </span>
-                            </li>
-                          );
-                        })}
-                      </ul>
-                    </div>
-                  ))
+              meta={plan.data ? `עד ${formatMinutes(plan.data.dailyMin)} ביום` : undefined}
+              action={
+                <Link to="/settings#study" className="text-[13px] text-ink-2 underline-offset-4 hover:text-ink hover:underline">
+                  שינוי
+                </Link>
+              }
+            >
+              {plan.data?.days.some((d) => d.items.length) ? (
+                <ol className="space-y-4">
+                  {plan.data.days
+                    .filter((d) => d.items.length)
+                    .map((d) => (
+                      <li key={d.date} className="flex gap-4">
+                        <div className="w-11 shrink-0 text-center">
+                          <span className="display block text-[26px] leading-none tabular">{dayOfMonth(d.date)}</span>
+                          <span className="block text-[12px] text-ink-3">{formatWeekday(d.date).replace('יום ', '')}</span>
+                        </div>
+                        <ul className="min-w-0 flex-1 border-s border-rule ps-4">
+                          {d.items.map((i) => {
+                            const c = lag.find((l) => l.courseId === i.courseId);
+                            return (
+                              <li key={`${i.moduleId}-${i.part}`} className="flex items-baseline gap-2 py-1 text-[14px]">
+                                {c ? <CourseMark color={c.color} className="h-3 translate-y-0.5" /> : null}
+                                <span className="min-w-0 flex-1 truncate">{i.title}</span>
+                                <span className="shrink-0 text-[12.5px] text-ink-3 tabular">
+                                  {i.minutes}′{i.parts > 1 ? ` · ${i.part}/${i.parts}` : ''}
+                                </span>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      </li>
+                    ))}
+                </ol>
               ) : (
-                <p className="py-4 text-center text-sm text-muted">אין הרצאות להשלים. כל הכבוד!</p>
+                <p className="text-[14px] text-ink-3">אין הרצאות להשלים.</p>
               )}
               {plan.data?.unscheduledMin ? (
-                <p className="text-xs text-urgent">עוד {formatMinutes(plan.data.unscheduledMin)} לא נכנסו לשבוע הזה. שקול להגדיל את הזמן היומי.</p>
+                <p className="mt-4 border-t border-rule pt-3 text-[13.5px] text-accent">
+                  עוד {formatMinutes(plan.data.unscheduledMin)} לא נכנסו לשבוע הזה. אפשר להגדיל את הזמן היומי בהגדרות.
+                </p>
               ) : null}
-            </div>
-          </Card>
-        </div>
+            </Section>
+          </div>
+        </aside>
       </div>
     </div>
   );

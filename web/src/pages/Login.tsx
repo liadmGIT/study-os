@@ -1,27 +1,35 @@
 import { useQueryClient } from '@tanstack/react-query';
-import { LockKeyhole } from 'lucide-react';
-import { useState } from 'react';
-import { Button, Card, Input } from '../components/ui';
+import { useId, useState } from 'react';
+import { Button, Input } from '../components/ui';
 import { post } from '../lib/api';
+import { formatFullDate, formatHebrewDate, hebrewYear, todayKey } from '../lib/format';
 
+/** A notebook cover: the title, today's date, and one field. */
 export function LoginPage() {
   const qc = useQueryClient();
+  const id = useId();
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const today = todayKey();
 
   return (
-    <div className="flex min-h-dvh items-center justify-center px-4">
-      <Card className="w-full max-w-sm p-6">
-        <div className="mb-6 flex flex-col items-center gap-3 text-center">
-          <img src="/icons/icon.svg" alt="" className="size-14" />
-          <div>
-            <h1 className="text-xl font-bold">מערכת הלימודים</h1>
-            <p className="text-sm text-muted">משימות, הרצאות ועדכונים מ-Moodle במקום אחד</p>
-          </div>
-        </div>
+    <main className="margin-rule flex min-h-dvh flex-col justify-center px-6 py-12 [--margin-at:56px] md:ps-28 lg:ps-36 lg:[--margin-at:88px]">
+      <div className="max-w-xl">
+        <p className="eyebrow rise">שנת הלימודים {hebrewYear()}</p>
+        <h1 className="display rise mt-3 text-[64px] leading-[0.95] md:text-[88px]" style={{ '--i': 1 } as React.CSSProperties}>
+          לימודים
+        </h1>
+        <p className="rise mt-4 max-w-sm text-[16px] text-ink-2" style={{ '--i': 2 } as React.CSSProperties}>
+          משימות, הרצאות ועדכונים מכל הקורסים ב-Moodle, במקום אחד.
+        </p>
+        <p className="rise mt-1 text-[14px] text-ink-3" style={{ '--i': 2 } as React.CSSProperties}>
+          {formatFullDate(today)} · {formatHebrewDate(today)}
+        </p>
+
         <form
-          className="space-y-3"
+          className="rise mt-10 max-w-sm space-y-3 border-t-2 border-ink pt-6"
+          style={{ '--i': 3 } as React.CSSProperties}
           onSubmit={async (e) => {
             e.preventDefault();
             setLoading(true);
@@ -37,20 +45,32 @@ export function LoginPage() {
             }
           }}
         >
-          <label className="block">
-            <span className="mb-1 flex items-center gap-1.5 text-xs font-medium text-muted">
-              <LockKeyhole className="size-3.5" />
-              סיסמת המערכת
-            </span>
-            <Input type="password" autoFocus autoComplete="current-password" value={password} onChange={(e) => setPassword(e.target.value)} />
+          <label htmlFor={id} className="block text-[14px] font-medium">
+            סיסמה
           </label>
-          {error ? <p className="text-sm text-overdue">{error}</p> : null}
+          <Input
+            id={id}
+            type="password"
+            autoFocus
+            autoComplete="current-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            aria-invalid={!!error || undefined}
+            aria-describedby={`${id}-hint ${error ? `${id}-err` : ''}`}
+          />
+          <p id={`${id}-hint`} className="text-[13px] text-ink-3">
+            הסיסמה של המערכת הזו (מההתקנה), לא הסיסמה של האוניברסיטה.
+          </p>
+          {error ? (
+            <p id={`${id}-err`} role="alert" className="text-[14px] text-accent">
+              {error}
+            </p>
+          ) : null}
           <Button variant="primary" className="w-full" loading={loading} disabled={!password}>
             כניסה
           </Button>
-          <p className="text-center text-xs text-faint">זו הסיסמה שהגדרת בשרת (APP_PASSWORD), לא סיסמת האוניברסיטה.</p>
         </form>
-      </Card>
-    </div>
+      </div>
+    </main>
   );
 }

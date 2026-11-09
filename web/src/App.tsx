@@ -1,6 +1,7 @@
 import { createBrowserRouter, RouterProvider } from 'react-router';
 import { Layout } from './components/Layout';
 import { PageLoader } from './components/ui';
+import { ApiError } from './lib/api';
 import { useMe } from './lib/queries';
 import { ConnectPage } from './pages/Connect';
 import { CourseDetailPage } from './pages/CourseDetail';
@@ -35,7 +36,10 @@ const router = createBrowserRouter([
 
 export function App() {
   const me = useMe();
-  if (me.isLoading) return <PageLoader />;
-  if (!me.data?.authed) return <LoginPage />;
+  // isPending (not isLoading): while saved data is being restored the query is pending but not fetching yet.
+  if (me.isPending) return <PageLoader />;
+  // No connection (not a "logged out" answer): open the app with the data saved on this device.
+  const offline = me.isError && !(me.error instanceof ApiError);
+  if (!me.data?.authed && !offline) return <LoginPage />;
   return <RouterProvider router={router} />;
 }

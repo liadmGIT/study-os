@@ -1,86 +1,209 @@
 @import 'tailwindcss';
 
-@theme {
-  --font-sans: 'Heebo', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', Arial, sans-serif;
+/*
+ * "Study notebook": warm paper, ink typography, thin rules instead of boxes,
+ * and one red-pen accent reserved for deadlines and urgency.
+ * All text colors are ≥ 4.5:1 against paper, surface and sunken, in both themes.
+ */
 
-  --color-canvas: #f7f6f3;
-  --color-surface: #ffffff;
-  --color-sunken: #efede8;
-  --color-line: #e4e1da;
-  --color-ink: #1c1f26;
-  --color-muted: #6b6f7a;
-  --color-faint: #9a9da6;
-  --color-brand: #1f2a44;
-  --color-brand-soft: #e6e9f2;
-  --color-accent: #d97706;
+:root {
+  --c-paper: #f5f1e8;
+  --c-surface: #fbf9f4;
+  --c-sunken: #ece6da;
+  --c-rule: #ddd5c6;
+  --c-rule-strong: #c4b9a5;
+  --c-ink: #1f1c17;
+  --c-ink-2: #575047;
+  --c-ink-3: #6b6458;
+  --c-accent: #b42318; /* red pen */
+  --c-green: #2b6a4b;
+  --c-amber: #8a5300;
+  --c-blue: #1f4f8f;
+  --c-focus: #1f4f8f;
+  --grain-opacity: 0.35;
+  color-scheme: light;
+}
 
-  --color-overdue: #dc2626;
-  --color-urgent: #ea580c;
-  --color-week: #ca8a04;
-  --color-later: #64748b;
-  --color-ok: #16a34a;
+:root[data-theme='dark'] {
+  --c-paper: #161513;
+  --c-surface: #1e1c19;
+  --c-sunken: #25221e;
+  --c-rule: #2f2c27;
+  --c-rule-strong: #47423a;
+  --c-ink: #eee8dd;
+  --c-ink-2: #b9b0a2;
+  --c-ink-3: #9b9285;
+  --c-accent: #ff8a7a;
+  --c-green: #7fcfa3;
+  --c-amber: #e9b45a;
+  --c-blue: #9ec0f5;
+  --c-focus: #9ec0f5;
+  --grain-opacity: 0.18;
+  color-scheme: dark;
 }
 
 @media (prefers-color-scheme: dark) {
-  :root {
-    --color-canvas: #111317;
-    --color-surface: #181b21;
-    --color-sunken: #0d0f12;
-    --color-line: #2a2e37;
-    --color-ink: #e9eaee;
-    --color-muted: #a0a4ae;
-    --color-faint: #6f7480;
-    --color-brand: #c7d0ea;
-    --color-brand-soft: #232a3b;
-    --color-accent: #f59e0b;
-    --color-overdue: #f87171;
-    --color-urgent: #fb923c;
-    --color-week: #facc15;
-    --color-later: #94a3b8;
-    --color-ok: #4ade80;
+  :root:not([data-theme='light']) {
+    --c-paper: #161513;
+    --c-surface: #1e1c19;
+    --c-sunken: #25221e;
+    --c-rule: #2f2c27;
+    --c-rule-strong: #47423a;
+    --c-ink: #eee8dd;
+    --c-ink-2: #b9b0a2;
+    --c-ink-3: #9b9285;
+    --c-accent: #ff8a7a;
+    --c-green: #7fcfa3;
+    --c-amber: #e9b45a;
+    --c-blue: #9ec0f5;
+    --c-focus: #9ec0f5;
+    --grain-opacity: 0.18;
+    color-scheme: dark;
   }
 }
 
-html,
-body {
-  background: var(--color-canvas);
-  color: var(--color-ink);
+@theme inline {
+  --font-sans: 'IBM Plex Sans Hebrew', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Frank Ruhl Libre', 'David', Georgia, serif;
+
+  --color-paper: var(--c-paper);
+  --color-surface: var(--c-surface);
+  --color-sunken: var(--c-sunken);
+  --color-rule: var(--c-rule);
+  --color-rule-strong: var(--c-rule-strong);
+  --color-ink: var(--c-ink);
+  --color-ink-2: var(--c-ink-2);
+  --color-ink-3: var(--c-ink-3);
+  --color-accent: var(--c-accent);
+  --color-green: var(--c-green);
+  --color-amber: var(--c-amber);
+  --color-blue: var(--c-blue);
+}
+
+html {
+  background: var(--c-paper);
+  color: var(--c-ink);
   -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 body {
   font-family: var(--font-sans);
-  font-feature-settings: 'tnum' 0;
+  font-size: 15px;
+  line-height: 1.6;
+  background: var(--c-paper);
+  min-height: 100dvh;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* Paper grain: a tiny SVG noise tile, barely visible. */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  opacity: var(--grain-opacity);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 .45 0 0 0 0 .38 0 0 0 0 .28 0 0 0 .09 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+#root {
+  position: relative;
+  z-index: 1;
+}
+
+::selection {
+  background: color-mix(in srgb, var(--c-accent) 22%, transparent);
+}
+
+/* One clear, consistent focus ring for keyboard users. */
+:focus-visible {
+  outline: 2px solid var(--c-focus);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+:focus:not(:focus-visible) {
+  outline: none;
 }
 
 .tabular {
   font-variant-numeric: tabular-nums;
 }
 
-/* Notes / announcement HTML */
+/* Headings in the serif face. */
+.display {
+  font-family: var(--font-serif);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  line-height: 1.15;
+}
+
+/* Small label above a section ("eyebrow"). */
+.eyebrow {
+  font-size: 12.5px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  color: var(--c-ink-3);
+}
+
+/* Notebook margin: two thin red-pen lines along the start edge of the page. */
+.margin-rule {
+  position: relative;
+}
+@media (min-width: 768px) {
+  .margin-rule::before {
+    content: '';
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: var(--margin-at, 0px);
+    width: 5px;
+    border-inline: 1px solid color-mix(in srgb, var(--c-accent) 28%, transparent);
+    pointer-events: none;
+  }
+}
+
+/* Hand-drawn red-pen underline, used sparingly (today's date). Drawn as a mask so it follows the theme. */
+.pen-underline {
+  position: relative;
+  display: inline-block;
+}
+.pen-underline::after {
+  content: '';
+  position: absolute;
+  inset-inline: -2px;
+  bottom: -0.14em;
+  height: 0.34em;
+  background: var(--c-accent);
+  -webkit-mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8 C 40 3, 90 11, 130 6 S 185 4, 198 7' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+  mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 200 12' preserveAspectRatio='none'%3E%3Cpath d='M2 8 C 40 3, 90 11, 130 6 S 185 4, 198 7' fill='none' stroke='black' stroke-width='2.6' stroke-linecap='round'/%3E%3C/svg%3E") no-repeat center / 100% 100%;
+  pointer-events: none;
+}
+
+/* Rich text: announcements and lecture notes. */
 .prose-he {
-  line-height: 1.7;
+  line-height: 1.75;
   overflow-wrap: anywhere;
 }
 .prose-he h1,
 .prose-he h2,
 .prose-he h3 {
-  font-weight: 700;
-  margin: 0.8em 0 0.3em;
+  font-family: var(--font-serif);
+  font-weight: 600;
+  margin: 0.9em 0 0.3em;
 }
 .prose-he h1 {
-  font-size: 1.2rem;
+  font-size: 1.25rem;
 }
 .prose-he h2 {
-  font-size: 1.08rem;
+  font-size: 1.1rem;
 }
 .prose-he p {
-  margin: 0.4em 0;
+  margin: 0.45em 0;
 }
 .prose-he ul,
 .prose-he ol {
   padding-inline-start: 1.3em;
-  margin: 0.4em 0;
+  margin: 0.45em 0;
 }
 .prose-he ul {
   list-style: disc;
@@ -89,15 +212,21 @@ body {
   list-style: decimal;
 }
 .prose-he a {
-  color: var(--color-brand);
+  color: var(--c-blue);
   text-decoration: underline;
+  text-underline-offset: 2px;
 }
 .prose-he code {
-  background: var(--color-sunken);
-  border-radius: 4px;
+  background: var(--c-sunken);
+  border-radius: 3px;
   padding: 0 4px;
   direction: ltr;
   unicode-bidi: isolate;
+}
+.prose-he blockquote {
+  border-inline-start: 3px solid var(--c-rule-strong);
+  padding-inline-start: 0.8em;
+  color: var(--c-ink-2);
 }
 .prose-he img {
   max-width: 100%;
@@ -108,11 +237,58 @@ body {
   padding-bottom: env(safe-area-inset-bottom);
 }
 
-@keyframes spin-slow {
+/* Page load: sections rise in one after another. */
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
   to {
-    transform: rotate(360deg);
+    opacity: 1;
+    transform: none;
   }
 }
-.animate-spin-slow {
-  animation: spin-slow 1.2s linear infinite;
+.rise {
+  animation: rise 0.45s cubic-bezier(0.2, 0.7, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+}
+
+@keyframes sheet-in-bottom {
+  from {
+    transform: translateY(24px);
+    opacity: 0;
+  }
+}
+@keyframes sheet-in-side {
+  from {
+    transform: translateX(-24px);
+    opacity: 0;
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+
+@keyframes skeleton {
+  50% {
+    opacity: 0.55;
+  }
+}
+.skeleton {
+  background: var(--c-sunken);
+  border-radius: 4px;
+  animation: skeleton 1.4s ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
 }

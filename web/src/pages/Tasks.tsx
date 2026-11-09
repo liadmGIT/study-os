@@ -1,15 +1,16 @@
-import { clsx } from 'clsx';
-import { ChevronDown, Inbox, Search } from 'lucide-react';
-import { useMemo, useState } from 'react';
+import { ChevronDown, Search } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router';
 import { QuickAdd } from '../components/QuickAdd';
-import { TaskRow } from '../components/TaskRow';
-import { Card, Chip, Empty, Input, PageHeader, PageLoader, SectionTitle, Segmented } from '../components/ui';
+import { TaskList } from '../components/TaskRow';
+import { cn, Empty, GroupLabel, Input, PageHeader, PageLoader, Select, Tabs } from '../components/ui';
 import { BUCKETS } from '../lib/labels';
 import { useCourses, useTasks } from '../lib/queries';
+import { usePref } from '../lib/storage';
 import type { Bucket, Task } from '../lib/types';
 
 type View = 'open' | 'notstarted' | 'all';
+const VIEWS = ['open', 'notstarted', 'all'] as const;
 const OPEN_BUCKETS: Bucket[] = ['overdue', 'urgent', 'week', 'later', 'nodate'];
 const CLOSED_BUCKETS: Bucket[] = ['done', 'expired'];
 
@@ -20,13 +21,30 @@ export function TasksPage() {
   const courses = useCourses();
   const [search, setSearch] = useState('');
   const [openClosed, setOpenClosed] = useState<Record<string, boolean>>({});
-  const view = (params.get('filter') === 'notstarted' ? 'notstarted' : params.get('view') ?? 'open') as View;
+  const [savedView, setSavedView] = usePref<View>('tasks.view', 'open', VIEWS);
+  const searchRef = useRef<HTMLInputElement>(null);
+  const view: View = params.get('filter') === 'notstarted' ? 'notstarted' : savedView;
   const courseFilter = params.get('course') ? Number(params.get('course')) : null;
 
-  const setParam = (key: string, value: string | null) => {
-    if (value === null) params.delete(key);
-    else params.set(key, value);
-    if (key === 'view') params.delete('filter');
+  // "/" from anywhere lands here with ?focus=search.
+  useEffect(() => {
+    if (params.get('focus') === 'search') {
+      searchRef.current?.focus();
+      params.delete('focus');
+      setParams(params, { replace: true });
+    }
+  }, [params, setParams]);
+
+  const setView = (v: View) => {
+    setSavedView(v);
+    if (params.has('filter')) {
+      params.delete('filter');
+      setParams(params, { replace: true });
+    }
+  };
+  const setCourse = (id: string) => {
+    if (id) params.set('course', id);
+    else params.delete('course');
     setParams(params, { replace: true });
   };
 
@@ -49,87 +67,89 @@ export function TasksPage() {
   }, [filtered]);
 
   const activeCourses = courses.data?.filter((c) => c.active) ?? [];
-  const buckets = view === 'all' ? [...OPEN_BUCKETS, ...CLOSED_BUCKETS] : view === 'open' ? [...OPEN_BUCKETS, ...CLOSED_BUCKETS] : OPEN_BUCKETS;
+  const buckets = view === 'notstarted' ? OPEN_BUCKETS : [...OPEN_BUCKETS, ...CLOSED_BUCKETS];
+  const openCount = (tasks.data ?? []).filter((t) => !t.hidden && OPEN_BUCKETS.includes(t.urgency.bucket)).length;
 
   return (
     <div>
-      <PageHeader title="משימות" subtitle="כל המטלות מכל הקורסים, יחד עם המשימות שלך" />
-      <Card className="mb-4 p-3">
-        <QuickAdd defaultCourseId={courseFilter ?? undefined} />
-      </Card>
+      <PageHeader eyebrow={tasks.data ? `${openCount} פתוחות` : undefined} title="משימות" subtitle="כל המטלות מכל הקורסים, יחד עם המשימות שלך." />
 
-      <div className="mb-4 flex flex-col gap-3">
-        <div className="flex flex-wrap items-center gap-2">
-          <Segmented<View>
-            value={view}
-            onChange={(v) => setParam('view', v)}
-            options={[
-              { value: 'open', label: 'לפי דחיפות' },
-              { value: 'notstarted', label: 'עוד לא התחלתי' },
-              { value: 'all', label: 'הכול' },
-            ]}
-          />
-          <div className="relative min-w-40 flex-1 sm:max-w-64">
-            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-faint" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש" className="ps-9" />
+      <div className="rise mb-6" style={{ '--i': 1 } as React.CSSProperties}>
+        <QuickAdd defaultCourseId={courseFilter ?? undefined} />
+      </div>
+
+      <div className="rise mb-2 flex flex-col gap-3 md:flex-row md:items-end" style={{ '--i': 2 } as React.CSSProperties}>
+        <Tabs<View>
+          label="תצוגה"
+          value={view}
+          onChange={setView}
+          className="md:flex-1"
+          options={[
+            { value: 'open', label: 'לפי דחיפות' },
+            { value: 'notstarted', label: 'עוד לא התחלתי' },
+            { value: 'all', label: 'הכול' },
+          ]}
+        />
+        <div className="flex gap-2 md:pb-1.5">
+          <div className="relative min-w-0 flex-1 md:w-56 md:flex-none">
+            <Search className="pointer-events-none absolute start-3 top-1/2 size-4 -translate-y-1/2 text-ink-3" aria-hidden />
+            <Input ref={searchRef} type="search" value={search} onChange={(e) => setSearch(e.target.value)} placeholder="חיפוש" aria-label="חיפוש משימות" className="ps-9" />
           </div>
-        </div>
-        <div className="-mx-4 flex gap-1.5 overflow-x-auto px-4 pb-1 md:mx-0 md:flex-wrap md:px-0">
-          <Chip active={!courseFilter} onClick={() => setParam('course', null)}>
-            כל הקורסים
-          </Chip>
-          {activeCourses.map((c) => (
-            <Chip key={c.id} active={courseFilter === c.id} onClick={() => setParam('course', String(c.id))}>
-              <span className="size-2 rounded-full" style={{ background: c.color }} />
-              {c.fullName}
-            </Chip>
-          ))}
+          <Select value={courseFilter ?? ''} onChange={(e) => setCourse(e.target.value)} aria-label="סינון לפי קורס" className="w-auto max-w-[45vw] md:max-w-56">
+            <option value="">כל הקורסים</option>
+            {activeCourses.map((c) => (
+              <option key={c.id} value={c.id}>
+                {c.fullName}
+              </option>
+            ))}
+          </Select>
         </div>
       </div>
 
       {tasks.isLoading ? (
         <PageLoader />
       ) : !filtered.length ? (
-        <Card>
-          <Empty icon={<Inbox className="size-8" />} title={view === 'notstarted' ? 'אין מטלות שמחכות שתתחיל 👏' : 'אין משימות כאן'}>
-            {view === 'notstarted' ? 'כל מה שקרוב כבר בעבודה.' : 'משימות מ-Moodle מופיעות כאן אוטומטית אחרי הסנכרון.'}
-          </Empty>
-        </Card>
+        <Empty title={view === 'notstarted' ? 'אין מטלות שמחכות שתתחיל' : search ? 'לא נמצאו משימות' : 'אין משימות כאן'} className="mt-6 border-y border-rule">
+          {view === 'notstarted' ? 'כל מה שקרוב כבר בעבודה.' : search ? 'נסה מילה אחרת, או נקה את הסינון.' : 'משימות מ-Moodle מופיעות כאן אוטומטית אחרי הסנכרון.'}
+        </Empty>
       ) : (
-        <Card className="p-2 sm:p-3">
+        <div className="rise mt-6" style={{ '--i': 3 } as React.CSSProperties}>
           {buckets.map((b) => {
             const list = groups.get(b);
             if (!list?.length) return null;
             const collapsible = CLOSED_BUCKETS.includes(b) && view !== 'all';
             const isOpen = !collapsible || openClosed[b];
             return (
-              <section key={b} className="mb-2 last:mb-0">
-                <SectionTitle
+              <section key={b} aria-label={BUCKETS[b].label}>
+                <GroupLabel
+                  color={BUCKETS[b].color}
                   count={list.length}
                   action={
                     collapsible ? (
-                      <button onClick={() => setOpenClosed((x) => ({ ...x, [b]: !x[b] }))} className="flex items-center gap-1 text-xs text-muted">
+                      <button
+                        type="button"
+                        onClick={() => setOpenClosed((x) => ({ ...x, [b]: !x[b] }))}
+                        aria-expanded={isOpen}
+                        className="inline-flex h-9 items-center gap-1 rounded-md px-2 text-[13px] text-ink-2 hover:text-ink"
+                      >
                         {isOpen ? 'הסתר' : 'הצג'}
-                        <ChevronDown className={clsx('size-4 transition-transform', isOpen && 'rotate-180')} />
+                        <ChevronDown className={cn('size-4 transition-transform', isOpen && 'rotate-180')} aria-hidden />
                       </button>
                     ) : null
                   }
                 >
-                  <span className="inline-flex items-center gap-2 px-1">
-                    <span className="size-2 rounded-full" style={{ background: BUCKETS[b].color }} />
-                    {BUCKETS[b].label}
-                  </span>
-                </SectionTitle>
-                {isOpen ? list.map((t) => <TaskRow key={t.id} task={t} showCourse={!courseFilter} />) : null}
+                  {BUCKETS[b].label}
+                </GroupLabel>
+                {isOpen ? <TaskList tasks={list} showCourse={!courseFilter} label={BUCKETS[b].label} /> : null}
               </section>
             );
           })}
-        </Card>
+        </div>
       )}
 
-      <div className="mt-4 text-center">
-        <button onClick={() => setShowHidden((x) => !x)} className="text-xs text-muted underline-offset-2 hover:underline">
-          {showHidden ? 'הסתר משימות מוסתרות' : 'הצג גם משימות שהסתרתי'}
+      <div className="mt-8 text-center">
+        <button type="button" onClick={() => setShowHidden((x) => !x)} className="min-h-11 text-[13.5px] text-ink-2 underline-offset-4 hover:text-ink hover:underline">
+          {showHidden ? 'להסתיר שוב את המשימות שהסתרתי' : 'להציג גם משימות שהסתרתי'}
         </button>
       </div>
     </div>

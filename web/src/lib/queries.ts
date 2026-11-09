@@ -19,7 +19,7 @@ import type {
   WeekData,
 } from './types';
 
-export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => get<{ authed: boolean }>('/api/auth/me'), staleTime: Infinity });
+export const useMe = () => useQuery({ queryKey: ['me'], queryFn: () => get<{ authed: boolean }>('/api/auth/me'), staleTime: Infinity, retry: 1 });
 export const useDashboard = () => useQuery({ queryKey: ['dashboard'], queryFn: () => get<Dashboard>('/api/dashboard') });
 export const useTasks = (includeHidden = false) =>
   useQuery({ queryKey: ['tasks', includeHidden], queryFn: () => get<Task[]>(`/api/tasks${includeHidden ? '?includeHidden=1' : ''}`) });

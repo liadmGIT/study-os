@@ -1,14 +1,15 @@
 import type { Tone } from '../components/ui';
 import type { Bucket, ChangeType, ModuleKind, TaskSource, TaskStatus } from './types';
 
+// Red pen is reserved for what needs attention now; everything else stays in ink.
 export const BUCKETS: Record<Bucket, { label: string; tone: Tone; color: string }> = {
-  overdue: { label: 'באיחור', tone: 'red', color: 'var(--color-overdue)' },
-  urgent: { label: 'דחוף', tone: 'orange', color: 'var(--color-urgent)' },
-  week: { label: 'השבוע', tone: 'amber', color: 'var(--color-week)' },
-  later: { label: 'בהמשך', tone: 'slate', color: 'var(--color-later)' },
-  nodate: { label: 'ללא תאריך', tone: 'neutral', color: 'var(--color-faint)' },
-  done: { label: 'הוגש / בוצע', tone: 'green', color: 'var(--color-ok)' },
-  expired: { label: 'עבר המועד', tone: 'neutral', color: 'var(--color-faint)' },
+  overdue: { label: 'באיחור', tone: 'accent', color: 'var(--c-accent)' },
+  urgent: { label: 'דחוף', tone: 'accent', color: 'var(--c-accent)' },
+  week: { label: 'השבוע', tone: 'amber', color: 'var(--c-amber)' },
+  later: { label: 'בהמשך', tone: 'neutral', color: 'var(--c-ink-3)' },
+  nodate: { label: 'ללא תאריך', tone: 'neutral', color: 'var(--c-rule-strong)' },
+  done: { label: 'הוגש / בוצע', tone: 'green', color: 'var(--c-green)' },
+  expired: { label: 'עבר המועד', tone: 'neutral', color: 'var(--c-rule-strong)' },
 };
 
 export const STATUS: Record<TaskStatus, string> = {
@@ -43,14 +44,22 @@ export const KIND: Record<ModuleKind, string> = {
 };
 
 export const CHANGE: Record<ChangeType, { label: string; tone: Tone }> = {
-  course_new: { label: 'קורס חדש', tone: 'brand' },
-  task_new: { label: 'מטלה חדשה', tone: 'orange' },
-  due_changed: { label: 'תאריך הגשה השתנה', tone: 'red' },
+  course_new: { label: 'קורס חדש', tone: 'blue' },
+  task_new: { label: 'מטלה חדשה', tone: 'amber' },
+  due_changed: { label: 'תאריך הגשה השתנה', tone: 'accent' },
   submitted: { label: 'הוגש', tone: 'green' },
   grade_new: { label: 'ציון חדש', tone: 'green' },
-  recording_new: { label: 'הקלטה חדשה', tone: 'brand' },
-  file_new: { label: 'חומר חדש', tone: 'slate' },
-  file_updated: { label: 'קובץ עודכן', tone: 'slate' },
-  module_new: { label: 'פריט חדש', tone: 'slate' },
+  recording_new: { label: 'הקלטה חדשה', tone: 'blue' },
+  file_new: { label: 'חומר חדש', tone: 'neutral' },
+  file_updated: { label: 'קובץ עודכן', tone: 'neutral' },
+  module_new: { label: 'פריט חדש', tone: 'neutral' },
   announcement_new: { label: 'הודעה', tone: 'amber' },
+};
+
+export const TONE_COLOR: Record<Tone, string> = {
+  neutral: 'var(--c-ink-2)',
+  accent: 'var(--c-accent)',
+  green: 'var(--c-green)',
+  amber: 'var(--c-amber)',
+  blue: 'var(--c-blue)',
 };

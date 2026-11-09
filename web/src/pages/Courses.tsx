@@ -1,6 +1,6 @@
-import { BookOpen, ListChecks, Megaphone, CirclePlay } from 'lucide-react';
+import type { CSSProperties } from 'react';
 import { Link } from 'react-router';
-import { Card, Empty, PageHeader, PageLoader, Progress, SectionTitle } from '../components/ui';
+import { CourseMark, Empty, GroupLabel, PageHeader, PageLoader, Progress } from '../components/ui';
 import { formatDue } from '../lib/format';
 import { useCourses } from '../lib/queries';
 
@@ -12,64 +12,75 @@ export function CoursesPage() {
 
   return (
     <div>
-      <PageHeader title="קורסים" subtitle="הקורסים של הסמסטר. אפשר להוסיף או להסיר קורסים מהמעקב בהגדרות." />
+      <PageHeader eyebrow={`${active.length} במעקב`} title="קורסים" subtitle="הקורסים של הסמסטר. אפשר להוסיף או להוריד קורסים מהמעקב בהגדרות." />
       {!q.data.length ? (
-        <Card>
-          <Empty icon={<BookOpen className="size-8" />} title="אין עדיין קורסים">
-            אחרי החיבור ל-Moodle והסנכרון הראשון, הקורסים יופיעו כאן.
-          </Empty>
-        </Card>
+        <Empty title="אין עדיין קורסים" className="border-y border-rule">
+          אחרי החיבור ל-Moodle והסנכרון הראשון, הקורסים יופיעו כאן.
+        </Empty>
       ) : null}
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+
+      <ul className="rise border-t-2 border-ink" style={{ '--i': 1 } as CSSProperties}>
         {active.map((c) => (
-          <Link key={c.id} to={`/courses/${c.id}`} className="group relative overflow-hidden rounded-2xl border border-line bg-surface p-4 transition-colors hover:bg-sunken">
-            <span className="absolute inset-y-0 start-0 w-1" style={{ background: c.color }} />
-            <div className="font-semibold leading-snug">{c.fullName}</div>
-            <div className="mt-0.5 text-xs text-faint" dir="ltr">
-              {c.shortName}
-            </div>
-            <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
-              <span className="inline-flex items-center gap-1">
-                <ListChecks className="size-3.5" />
-                {c.openTasks} משימות פתוחות
-              </span>
-              {c.lag ? (
-                <span className="inline-flex items-center gap-1">
-                  <CirclePlay className="size-3.5" />
-                  {c.lag.behind ? `${c.lag.behind} הרצאות מאחור` : 'מעודכן בהרצאות'}
-                </span>
-              ) : null}
-              {c.unreadAnnouncements ? (
-                <span className="inline-flex items-center gap-1 text-week">
-                  <Megaphone className="size-3.5" />
-                  {c.unreadAnnouncements} הודעות חדשות
-                </span>
-              ) : null}
-            </div>
-            {c.nextDue ? (
-              <div className="mt-3 rounded-xl bg-sunken px-3 py-2 text-[13px]">
-                <span className="text-muted">הגשה הבאה: </span>
-                <span className="font-medium">{c.nextDue.title}</span>
-                <span className="text-muted tabular"> · {formatDue(c.nextDue.dueAt)}</span>
+          <li key={c.id} className="border-b border-rule">
+            <Link to={`/courses/${c.id}`} className="group grid gap-x-8 gap-y-3 py-5 md:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)]">
+              <div className="flex min-w-0 gap-3">
+                <CourseMark color={c.color} className="mt-1.5 h-6 w-1" />
+                <div className="min-w-0">
+                  <h2 className="display text-[21px] group-hover:underline group-hover:decoration-rule-strong group-hover:underline-offset-4">{c.fullName}</h2>
+                  <p className="text-[13px] text-ink-3" dir="ltr" style={{ textAlign: 'right' }}>
+                    {c.shortName}
+                  </p>
+                </div>
               </div>
-            ) : null}
-            {c.lag ? <Progress value={c.lag.total ? c.lag.watched / c.lag.total : 0} color={c.color} className="mt-3" /> : null}
-          </Link>
+              <dl className="space-y-1 text-[14px] max-md:ps-4">
+                <div className="flex gap-2">
+                  <dt className="text-ink-3">משימות פתוחות</dt>
+                  <dd className="tabular">{c.openTasks}</dd>
+                </div>
+                {c.nextDue ? (
+                  <div>
+                    <dt className="sr-only">ההגשה הבאה</dt>
+                    <dd className="truncate">
+                      <span className="text-ink-2 tabular">{formatDue(c.nextDue.dueAt)}</span> · {c.nextDue.title}
+                    </dd>
+                  </div>
+                ) : null}
+                {c.unreadAnnouncements ? (
+                  <div>
+                    <dt className="sr-only">הודעות</dt>
+                    <dd className="text-amber">{c.unreadAnnouncements} הודעות חדשות</dd>
+                  </div>
+                ) : null}
+              </dl>
+              {c.lag ? (
+                <div className="text-[14px] max-md:ps-4">
+                  <p className="mb-1.5 flex justify-between gap-2">
+                    <span className="text-ink-3">הרצאות</span>
+                    <span className={c.lag.behind ? 'text-accent tabular' : 'text-green'}>{c.lag.behind ? `${c.lag.behind} מאחור` : 'מעודכן'}</span>
+                  </p>
+                  <Progress value={c.lag.total ? c.lag.watched / c.lag.total : 0} color={c.color} label={`${c.fullName}: ${c.lag.watched} מתוך ${c.lag.total} הרצאות`} />
+                </div>
+              ) : (
+                <div />
+              )}
+            </Link>
+          </li>
         ))}
-      </div>
+      </ul>
+
       {inactive.length ? (
-        <>
-          <SectionTitle count={inactive.length}>
-            <span className="mt-6 block">לא במעקב</span>
-          </SectionTitle>
-          <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="mt-10">
+          <GroupLabel count={inactive.length}>לא במעקב</GroupLabel>
+          <ul className="grid gap-x-8 sm:grid-cols-2 lg:grid-cols-3">
             {inactive.map((c) => (
-              <Link key={c.id} to={`/courses/${c.id}`} className="rounded-xl border border-line px-3 py-2.5 text-sm text-muted hover:bg-sunken">
-                {c.fullName}
-              </Link>
+              <li key={c.id} className="border-b border-rule">
+                <Link to={`/courses/${c.id}`} className="block py-2.5 text-[14.5px] text-ink-2 hover:text-ink hover:underline hover:underline-offset-4">
+                  {c.fullName}
+                </Link>
+              </li>
             ))}
-          </div>
-        </>
+          </ul>
+        </div>
       ) : null}
     </div>
   );
