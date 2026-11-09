@@ -21,7 +21,7 @@ function Figure({ value, label, sub, to, hot }: { value: number; label: string; 
 
 function Callout({ children, action, i }: { children: ReactNode; action?: ReactNode; i?: number }) {
   return (
-    <div className="rise mb-8 flex flex-col gap-3 border-y-2 border-ink py-4 sm:flex-row sm:items-center" style={{ '--i': i ?? 0 } as CSSProperties}>
+    <div className="rise mb-8 flex flex-col gap-3 rounded-e-md border-s-[3px] border-accent bg-sunken/70 px-4 py-3.5 sm:flex-row sm:items-center" style={{ '--i': i ?? 0 } as CSSProperties}>
       <div className="flex-1 text-[15px]">{children}</div>
       {action}
     </div>
